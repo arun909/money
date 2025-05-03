@@ -1,4 +1,14 @@
 import React, { useState, useEffect } from "react";
+import { 
+  collection, 
+  addDoc, 
+  getDocs, 
+  doc, 
+  deleteDoc,
+  where,
+  onSnapshot
+} from "firebase/firestore";
+import { db } from "./firebase";
 import "./App.css";
 
 const App = () => {
@@ -10,6 +20,58 @@ const App = () => {
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [selectedTags, setSelectedTags] = useState([]);
+  const [balance, setBalance] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  // Initialize Firebase listeners
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Set up real-time listener for transactions
+        const transactionsUnsub = onSnapshot(
+          collection(db, "transactions"), 
+          (snapshot) => {
+            const transactionsData = snapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }));
+            setTransactions(transactionsData);
+            calculateBalance(transactionsData);
+          }
+        );
+
+        // Set up real-time listener for tags
+        const tagsUnsub = onSnapshot(
+          collection(db, "tags"), 
+          (snapshot) => {
+            const tagsData = snapshot.docs.map(doc => doc.data().name);
+            setTags(tagsData);
+          }
+        );
+
+        setLoading(false);
+
+        return () => {
+          transactionsUnsub();
+          tagsUnsub();
+        };
+      } catch (error) {
+        console.error("Error fetching data:", error);
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const calculateBalance = (transactions) => {
+    const total = transactions.reduce((acc, transaction) => {
+      return transaction.type === "income" 
+        ? acc + Number(transaction.amount)
+        : acc - Number(transaction.amount);
+    }, 0);
+    setBalance(total);
+  };
 
   const toggleTheme = () => {
     setIsDarkMode((prev) => !prev);
@@ -19,36 +81,56 @@ const App = () => {
     setNewTag(e.target.value);
   };
 
-  const addTag = () => {
+  const addTag = async () => {
     if (newTag.trim()) {
-      setTags((prevTags) => [...prevTags, newTag.trim()]);
-      setNewTag("");
+      try {
+        await addDoc(collection(db, "tags"), {
+          name: newTag.trim()
+        });
+        setNewTag("");
+      } catch (error) {
+        console.error("Error adding tag:", error);
+      }
     }
   };
 
-  const removeTag = (tag) => {
-    setTags((prevTags) => prevTags.filter((t) => t !== tag));
+  const removeTag = async (tag) => {
+    try {
+      // Note: This implementation assumes you have document IDs for tags
+      // You might need to adjust based on your actual Firestore structure
+      const querySnapshot = await getDocs(
+        collection(db, "tags"),
+        where("name", "==", tag)
+      );
+      querySnapshot.forEach(async (doc) => {
+        await deleteDoc(doc.ref);
+      });
+    } catch (error) {
+      console.error("Error removing tag:", error);
+    }
   };
-a
+
   const handleTransactionTypeChange = (type) => {
     setTransactionType(type);
   };
 
-  const handleSubmitTransaction = () => {
+  const handleSubmitTransaction = async () => {
     if (amount && description) {
-      setTransactions((prevTransactions) => [
-        ...prevTransactions,
-        {
+      try {
+        await addDoc(collection(db, "transactions"), {
           type: transactionType,
-          amount,
+          amount: Number(amount),
           description,
           tags: selectedTags,
-          date: new Date().toLocaleString(),
-        },
-      ]);
-      setAmount("");
-      setDescription("");
-      setSelectedTags([]);
+          date: new Date().toISOString(),
+          createdAt: new Date()
+        });
+        setAmount("");
+        setDescription("");
+        setSelectedTags([]);
+      } catch (error) {
+        console.error("Error adding transaction:", error);
+      }
     }
   };
 
@@ -59,6 +141,21 @@ a
         : [...prevTags, tag]
     );
   };
+
+  const formatDate = (dateString) => {
+    const options = { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    };
+    return new Date(dateString).toLocaleDateString(undefined, options);
+  };
+
+  if (loading) {
+    return <div className="loading">Loading...</div>;
+  }
 
   return (
     <div className={`app ${isDarkMode ? "dark" : "light"}`}>
@@ -76,7 +173,7 @@ a
         <div className="balance-card">
           <h3>Total Balance</h3>
           <div className="balance-amount">
-            <span>$0.00</span>
+            <span>${balance.toFixed(2)}</span>
           </div>
         </div>
 
@@ -158,6 +255,20 @@ a
               />
             </div>
 
+            {/* Selected Tags */}
+            {selectedTags.length > 0 && (
+              <div className="selected-tags">
+                <label>Selected Tags:</label>
+                <div className="tags-list">
+                  {selectedTags.map((tag, index) => (
+                    <span key={index} className="tag">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Submit Button */}
             <button className="submit-btn" onClick={handleSubmitTransaction}>
               Submit
@@ -172,8 +283,10 @@ a
             {transactions.length === 0 ? (
               <div className="no-transactions">No transactions yet</div>
             ) : (
-              transactions.map((transaction, index) => (
-                <div key={index} className={`transaction ${transaction.type}`}>
+              [...transactions]
+                .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+                .map((transaction) => (
+                <div key={transaction.id} className={`transaction ${transaction.type}`}>
                   <div className="transaction-icon">
                     <svg
                       width="24"
@@ -187,17 +300,17 @@ a
                   <div className="transaction-details">
                     <div className="transaction-description">{transaction.description}</div>
                     <div className="transaction-tags">
-                      {transaction.tags.map((tag, index) => (
+                      {transaction.tags && transaction.tags.map((tag, index) => (
                         <span key={index} className="tag">
                           {tag}
                         </span>
                       ))}
                     </div>
-                    <div className="transaction-date">{transaction.date}</div>
+                    <div className="transaction-date">{formatDate(transaction.date)}</div>
                   </div>
                   <div className="transaction-amount">
                     <span>
-                      {transaction.type === "income" ? "+" : "-"}${transaction.amount}
+                      {transaction.type === "income" ? "+" : "-"}${transaction.amount.toFixed(2)}
                     </span>
                   </div>
                 </div>
