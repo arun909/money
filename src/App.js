@@ -6,6 +6,7 @@ import {
   doc, 
   deleteDoc,
   where,
+  query,
   onSnapshot
 } from "firebase/firestore";
 import { db } from "./firebase";
@@ -23,11 +24,9 @@ const App = () => {
   const [balance, setBalance] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  // Initialize Firebase listeners
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Set up real-time listener for transactions
         const transactionsUnsub = onSnapshot(
           collection(db, "transactions"), 
           (snapshot) => {
@@ -40,7 +39,6 @@ const App = () => {
           }
         );
 
-        // Set up real-time listener for tags
         const tagsUnsub = onSnapshot(
           collection(db, "tags"), 
           (snapshot) => {
@@ -67,8 +65,8 @@ const App = () => {
   const calculateBalance = (transactions) => {
     const total = transactions.reduce((acc, transaction) => {
       return transaction.type === "income" 
-        ? acc + Number(transaction.amount)
-        : acc - Number(transaction.amount);
+        ? acc + Number(transaction.amount || 0)
+        : acc - Number(transaction.amount || 0);
     }, 0);
     setBalance(total);
   };
@@ -96,12 +94,8 @@ const App = () => {
 
   const removeTag = async (tag) => {
     try {
-      // Note: This implementation assumes you have document IDs for tags
-      // You might need to adjust based on your actual Firestore structure
-      const querySnapshot = await getDocs(
-        collection(db, "tags"),
-        where("name", "==", tag)
-      );
+      const q = query(collection(db, "tags"), where("name", "==", tag));
+      const querySnapshot = await getDocs(q);
       querySnapshot.forEach(async (doc) => {
         await deleteDoc(doc.ref);
       });
@@ -115,12 +109,12 @@ const App = () => {
   };
 
   const handleSubmitTransaction = async () => {
-    if (amount && description) {
+    if (amount && !isNaN(amount) && description.trim()) {
       try {
         await addDoc(collection(db, "transactions"), {
           type: transactionType,
           amount: Number(amount),
-          description,
+          description: description.trim(),
           tags: selectedTags,
           date: new Date().toISOString(),
           createdAt: new Date()
@@ -153,23 +147,25 @@ const App = () => {
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
 
+  const formatAmount = (amount) => {
+    const num = Number(amount);
+    return !isNaN(num) ? num.toFixed(2) : "0.00";
+  };
+
   if (loading) {
-    return <div className="loading">Loading...</div>;
+    return <div className="loading">Loading My-Money...</div>;
   }
 
   return (
     <div className={`app ${isDarkMode ? "dark" : "light"}`}>
       <div className="sidebar">
         <div className="sidebar-header">
-          <h1>
-            <span>💰</span> Money Tracker
-          </h1>
+          <h1><span>🥭</span> My-Money</h1>
           <button className="theme-toggle" onClick={toggleTheme}>
             {isDarkMode ? "🌞" : "🌙"}
           </button>
         </div>
 
-        {/* Balance Card */}
         <div className="balance-card">
           <h3>Total Balance</h3>
           <div className="balance-amount">
@@ -177,11 +173,9 @@ const App = () => {
           </div>
         </div>
 
-        {/* Tags Section */}
         <div className="tags-section">
           <div className="tags-header">
             <h3>Tags</h3>
-            <button onClick={addTag}>Add</button>
           </div>
           <div className="tag-input">
             <input
@@ -190,7 +184,7 @@ const App = () => {
               onChange={handleTagChange}
               placeholder="New tag"
             />
-            <button onClick={addTag}>Add Tag</button>
+            <button onClick={addTag}>Add</button>
           </div>
           <div className="tag-list">
             {tags.map((tag, index) => (
@@ -213,13 +207,11 @@ const App = () => {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="main-content">
         <div className="transaction-form-container">
           <div className="transaction-form">
             <h2>Create Transaction</h2>
 
-            {/* Transaction Type Toggle */}
             <div className="type-toggle">
               <button
                 className={`toggle-btn ${transactionType === "income" ? "active income" : ""}`}
@@ -235,7 +227,6 @@ const App = () => {
               </button>
             </div>
 
-            {/* Amount & Description */}
             <div className="form-group">
               <label>Amount</label>
               <input
@@ -255,7 +246,6 @@ const App = () => {
               />
             </div>
 
-            {/* Selected Tags */}
             {selectedTags.length > 0 && (
               <div className="selected-tags">
                 <label>Selected Tags:</label>
@@ -269,32 +259,30 @@ const App = () => {
               </div>
             )}
 
-            {/* Submit Button */}
             <button className="submit-btn" onClick={handleSubmitTransaction}>
-              Submit
+              {transactionType === "income" ? "Add Income" : "Add Expense"}
             </button>
           </div>
         </div>
 
-        {/* Transactions List */}
         <div className="transactions-container">
-          <h2>Transactions</h2>
+          <h2>Recent Transactions</h2>
           <div className="transactions-list">
             {transactions.length === 0 ? (
-              <div className="no-transactions">No transactions yet</div>
+              <div className="no-transactions">No transactions yet. Start by adding one!</div>
             ) : (
               [...transactions]
                 .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
                 .map((transaction) => (
                 <div key={transaction.id} className={`transaction ${transaction.type}`}>
                   <div className="transaction-icon">
-                    <svg
-                      width="24"
-                      height="24"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <circle cx="12" cy="12" r="12" fill={transaction.type === "income" ? "#10b981" : "#ef4444"} />
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="12" cy="12" r="12" fill={transaction.type === "income" ? "var(--income)" : "var(--expense)"} />
+                      {transaction.type === "income" ? (
+                        <path d="M7 13L12 8L17 13" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      ) : (
+                        <path d="M7 11L12 16L17 11" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      )}
                     </svg>
                   </div>
                   <div className="transaction-details">
@@ -310,7 +298,7 @@ const App = () => {
                   </div>
                   <div className="transaction-amount">
                     <span>
-                      {transaction.type === "income" ? "+" : "-"}${transaction.amount.toFixed(2)}
+                      {transaction.type === "income" ? "+" : "-"}${formatAmount(transaction.amount)}
                     </span>
                   </div>
                 </div>
