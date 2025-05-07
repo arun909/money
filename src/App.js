@@ -56,6 +56,9 @@ const App = () => {
     period: "monthly"
   });
   const [showBudgetModal, setShowBudgetModal] = useState(false);
+  
+  // Mobile navigation
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -389,6 +392,11 @@ const App = () => {
     const num = Number(amount);
     return !isNaN(num) ? num.toFixed(2) : "0.00";
   };
+  
+  // Toggle mobile menu
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen(prev => !prev);
+  };
 
   // Filter transactions based on current filters
   const filteredTransactions = transactions.filter(transaction => {
@@ -424,19 +432,36 @@ const App = () => {
   });
 
   if (loading) {
-    return <div className="loading">Loading My-Money...</div>;
+    return (
+      <div className="loading">
+        <div className="loading-spinner"></div>
+        Loading My-Money...
+      </div>
+    );
   }
 
   return (
     <div className={`app ${isDarkMode ? "dark" : "light"}`}>
-      <div className="sidebar">
-        <div className="sidebar-header">
-          <h1><span></span> My-Money</h1>
+      {/* Navbar */}
+      <nav className="navbar">
+        <div className="navbar-brand">
+          <h1>My-Money</h1>
+        </div>
+        <div className="navbar-actions">
           <button className="theme-toggle" onClick={toggleTheme}>
             {isDarkMode ? "🌞" : "🌙"}
           </button>
+          <button 
+            className="mobile-menu-toggle" 
+            onClick={toggleMobileMenu}
+          >
+            ☰
+          </button>
         </div>
+      </nav>
 
+      {/* Sidebar */}
+      <div className="sidebar">
         <div className="balance-card">
           <h3>Total Balance</h3>
           <div className="balance-amount">
@@ -463,7 +488,7 @@ const App = () => {
               type="text"
               value={newTag}
               onChange={handleTagChange}
-              placeholder="New tag"
+              placeholder="Add new tag"
             />
             <button onClick={addTag}>Add</button>
           </div>
@@ -471,7 +496,7 @@ const App = () => {
             {tags.map((tag, index) => (
               <div key={index} className="tag-container">
                 <span
-                  className={`tag ${selectedTags.includes(tag) ? "active" : ""}`}
+                  className={`tag ${selectedTags.includes(tag) ? "active" : ""} ${filterTag === tag ? "active" : ""}`}
                   onClick={() => handleTagSelect(tag)}
                 >
                   {tag}
@@ -479,8 +504,9 @@ const App = () => {
                 <button
                   className="delete-tag"
                   onClick={() => removeTag(tag)}
+                  title="Remove tag"
                 >
-                  ❌
+                  ✕
                 </button>
               </div>
             ))}
@@ -489,6 +515,7 @@ const App = () => {
       </div>
 
       <div className="main-content">
+        {/* Calendar */}
         <div className="calendar-container">
           <div className="calendar-toggle" onClick={toggleCalendarVisibility}>
             <h2>Calendar {calendarVisible ? "▼" : "▶"}</h2>
@@ -497,22 +524,23 @@ const App = () => {
           {calendarVisible && renderCalendar()}
         </div>
 
+        {/* Transaction Form */}
         <div className="transaction-form-container">
           <div className="transaction-form">
-            <h2>{editingTransaction ? "Edit Transaction" : "Create Transaction"}</h2>
+            <h2>{editingTransaction ? "Edit Transaction" : "New Transaction"}</h2>
 
             <div className="type-toggle">
               <button
                 className={`toggle-btn ${transactionType === "income" ? "active income" : ""}`}
                 onClick={() => handleTransactionTypeChange("income")}
               >
-                Income
+                💰 Income
               </button>
               <button
                 className={`toggle-btn ${transactionType === "expense" ? "active expense" : ""}`}
                 onClick={() => handleTransactionTypeChange("expense")}
               >
-                Expense
+                💸 Expense
               </button>
             </div>
 
@@ -540,8 +568,12 @@ const App = () => {
                 <label>Selected Tags:</label>
                 <div className="tags-list">
                   {selectedTags.map((tag, index) => (
-                    <span key={index} className="tag">
-                      {tag}
+                    <span 
+                      key={index} 
+                      className="tag active"
+                      onClick={() => handleTagSelect(tag)}
+                    >
+                      {tag} ✕
                     </span>
                   ))}
                 </div>
@@ -571,9 +603,10 @@ const App = () => {
           </div>
         </div>
 
+        {/* Transactions List */}
         <div className="transactions-container">
           <div className="transactions-header">
-            <h2>Recent Transactions</h2>
+            <h2>Transactions</h2>
             <div className="filters">
               <div className="filter-group">
                 <span>Type:</span>
@@ -648,12 +681,16 @@ const App = () => {
                     <div className="transaction-description">{transaction.description}</div>
                     <div className="transaction-tags">
                       {transaction.tags && transaction.tags.map((tag, index) => (
-                        <span key={index} className="tag">
+                        <span 
+                          key={index} 
+                          className="tag"
+                          onClick={() => handleFilterTagChange(tag)}
+                        >
                           {tag}
                         </span>
                       ))}
                     </div>
-                    <div className="transaction-date">{formatDate(transaction.date)}</div>
+                    <div className="transaction-date">{formatDate(transaction.date || transaction.createdAt)}</div>
                   </div>
                   <div className="transaction-amount">
                     <span>
