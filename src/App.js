@@ -1,23 +1,178 @@
-import React, { useState, useEffect } from "react";
-import { 
-  collection, 
-  addDoc, 
-  getDocs, 
-  doc, 
+import React, { useState, useEffect, useRef } from "react";
+import {
+  collection,
+  addDoc,
+  getDocs,
+  doc,
   deleteDoc,
   where,
   query,
   onSnapshot,
-  updateDoc
+  updateDoc,
+  orderBy, // Added for sorting
+  Timestamp // Added for createdAt
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { Chart, registerables } from 'chart.js/auto'; // Import Chart.js
 import "./App.css";
+
+Chart.register(...registerables); // Register all Chart.js components
 
 const CURRENCY = {
   symbol: "₹",
   code: "INR"
 };
 
+// --- Helper Components (MonthlyOverviewDiagram, BucketListItem - remain the same as previous response) ---
+
+// Monthly Overview Diagram Component
+const MonthlyOverviewDiagram = ({ transactions, currentMonthDate }) => {
+  const chartRef = useRef(null);
+  const chartInstance = useRef(null);
+
+  useEffect(() => {
+    if (!transactions.length && chartRef.current) { // Handle case with no transactions
+        if (chartInstance.current) {
+            chartInstance.current.destroy();
+            chartInstance.current = null;
+        }
+        const ctx = chartRef.current.getContext("2d");
+        // Optionally, display a message or an empty state chart
+        ctx.clearRect(0, 0, chartRef.current.width, chartRef.current.height);
+        ctx.font = "16px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("No transaction data for this month.", chartRef.current.width / 2, chartRef.current.height / 2);
+        return;
+    }
+    if (!chartRef.current) return;
+
+
+    const month = currentMonthDate.getMonth();
+    const year = currentMonthDate.getFullYear();
+
+    const monthlyIncome = transactions
+      .filter(t => {
+        const tDate = new Date(t.date || (t.createdAt?.toDate ? t.createdAt.toDate() : t.createdAt));
+        return t.type === "income" && tDate.getMonth() === month && tDate.getFullYear() === year;
+      })
+      .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
+    const monthlyExpense = transactions
+      .filter(t => {
+        const tDate = new Date(t.date || (t.createdAt?.toDate ? t.createdAt.toDate() : t.createdAt));
+        return t.type === "expense" && tDate.getMonth() === month && tDate.getFullYear() === year;
+      })
+      .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
+    if (chartInstance.current) {
+      chartInstance.current.destroy();
+    }
+
+    const ctx = chartRef.current.getContext("2d");
+    chartInstance.current = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: ["Income", "Expense"],
+        datasets: [
+          {
+            label: `Overview for ${currentMonthDate.toLocaleString('default', { month: 'long' })} ${year}`,
+            data: [monthlyIncome, monthlyExpense],
+            backgroundColor: [
+              "rgba(118, 200, 192, 0.6)", // --income with alpha
+              "rgba(255, 107, 107, 0.6)", // --expense with alpha
+            ],
+            borderColor: [
+              "rgb(118, 200, 192)",
+              "rgb(255, 107, 107)",
+            ],
+            borderWidth: 1,
+          },
+        ],
+      },
+      options: {
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: function(value) {
+                return CURRENCY.symbol + value;
+              }
+            }
+          },
+        },
+        responsive: true,
+        maintainAspectRatio: false,
+      },
+    });
+     return () => {
+      if (chartInstance.current) {
+        chartInstance.current.destroy();
+        chartInstance.current = null;
+      }
+    };
+  }, [transactions, currentMonthDate]);
+
+  return (
+    <div className="monthly-overview-container card-style">
+      <h2>Monthly Financial Overview</h2>
+      <p>Showing data for: {currentMonthDate.toLocaleString('default', { month: 'long' })} {currentMonthDate.getFullYear()}</p>
+      <div style={{ height: "300px", position: "relative" }}>
+        <canvas ref={chartRef}></canvas>
+      </div>
+    </div>
+  );
+};
+
+// Bucket List Item Component
+const BucketListItem = ({ item, onUpdate, onDelete, onToggleComplete }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState(item.text);
+  const [editNotes, setEditNotes] = useState(item.notes || "");
+
+  const handleSave = () => {
+    onUpdate(item.id, { text: editText, notes: editNotes });
+    setIsEditing(false);
+  };
+
+  return (
+    <div className={`bucket-list-item ${item.isCompleted ? "completed" : ""}`}>
+      {isEditing ? (
+        <div className="bucket-item-edit-form">
+          <input
+            type="text"
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            placeholder="Item name"
+          />
+          <textarea
+            value={editNotes}
+            onChange={(e) => setEditNotes(e.target.value)}
+            placeholder="Notes (optional)"
+          />
+          <div className="actions">
+            <button onClick={handleSave} className="save-btn">Save</button>
+            <button onClick={() => setIsEditing(false)} className="cancel-btn">Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <div className="bucket-item-view">
+          <div className="item-content" onClick={() => onToggleComplete(item.id, !item.isCompleted)}>
+            <input type="checkbox" checked={item.isCompleted} onChange={() => {}} className="item-checkbox"/> {/* Added onChange to checkbox for accessibility though click is on parent */}
+            <span className="item-text">{item.text}</span>
+          </div>
+          {item.notes && <p className="item-notes"><em>Notes:</em> {item.notes}</p>}
+          <div className="actions">
+            <button onClick={() => setIsEditing(true)} className="edit-btn">✏️</button>
+            <button onClick={() => onDelete(item.id)} className="delete-btn">🗑️</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+// Main App Component
 const App = () => {
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const savedMode = localStorage.getItem("darkMode");
@@ -30,6 +185,7 @@ const App = () => {
   const [transactionType, setTransactionType] = useState("income");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
+  const [transactionParty, setTransactionParty] = useState(""); // For "Received From" / "Paid To"
   const [selectedTags, setSelectedTags] = useState([]);
   const [balance, setBalance] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -43,202 +199,176 @@ const App = () => {
     topExpenseCategories: []
   });
   
-
-
-  // Calendar state
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [currentMonth, setCurrentMonth] = useState(new Date()); // For calendar and overview
   const [calendarVisible, setCalendarVisible] = useState(true);
   
-  // New state 
-  // for budget features
-  const [budgets, setBudgets] = useState([]);
-  const [newBudget, setNewBudget] = useState({
-    category: "",
-    amount: "",
-    period: "monthly"
-  });
-  const [showBudgetModal, setShowBudgetModal] = useState(false);
+  // Commenting out unused budget states to clear warnings
+  // const [budgets, setBudgets] = useState([]); 
+  // const [newBudget, setNewBudget] = useState({ category: "", amount: "", period: "monthly" });
+  // const [showBudgetModal, setShowBudgetModal] = useState(false);
   
-  // Mobile navigation
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  // Commenting out unused mobile menu state
+  // const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [activeView, setActiveView] = useState("dashboard"); // 'dashboard', 'overview', 'bucketlist'
+
+  // Bucket List State
+  const [bucketListItems, setBucketListItems] = useState([]);
+  const [newBucketItemText, setNewBucketItemText] = useState("");
+  const [newBucketItemNotes, setNewBucketItemNotes] = useState("");
+
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const transactionsUnsub = onSnapshot(
-          collection(db, "transactions"), 
-          (snapshot) => {
-            const transactionsData = snapshot.docs.map(doc => ({
-              id: doc.id,
-              ...doc.data()
-            }));
-
-            setTransactions(transactionsData);
-            calculateBalance(transactionsData);
-            calculateStatistics(transactionsData);
-          }
-        );
-
-        const tagsUnsub = onSnapshot(
-          collection(db, "tags"), 
-          (snapshot) => {
-            const tagsData = snapshot.docs.map(doc => doc.data().name);
-            setTags(tagsData);
-          }
-        );
-        
-        // Fetch budgets
-        const budgetsUnsub = onSnapshot(
-          collection(db, "budgets"),
-          (snapshot) => {
-            const budgetsData = snapshot.docs.map(doc => ({
-              id: doc.id,
-              ...doc.data()
-            }));
-            setBudgets(budgetsData);
-          }
-        );
-
-        setLoading(false);
-
-        return () => {
-          transactionsUnsub();
-          tagsUnsub();
-          budgetsUnsub();
-        };
-      } catch (error) {
-        console.error("Error fetching data:", error);
+    setLoading(true);
+    // Transactions
+    const transactionsQuery = query(collection(db, "transactions"), orderBy("createdAt", "desc"));
+    const transactionsUnsub = onSnapshot(transactionsQuery, (snapshot) => {
+        const transactionsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setTransactions(transactionsData);
+        calculateBalance(transactionsData);
+        calculateStatistics(transactionsData);
+      }, (error) => {
+        console.error("Error fetching transactions:", error);
         setLoading(false);
       }
-    };
+    );
 
-    fetchData();
+    // Tags
+    const tagsUnsub = onSnapshot(collection(db, "tags"), (snapshot) => {
+        const tagsData = snapshot.docs.map(doc => doc.data().name);
+        setTags(tagsData);
+      }, (error) => {
+        console.error("Error fetching tags:", error);
+      }
+    );
+    
+    // Commenting out budget fetching as it's unused
+    // const budgetsUnsub = onSnapshot(collection(db, "budgets"), (snapshot) => {
+    //     const budgetsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    //     // setBudgets(budgetsData); // budgets state is commented out
+    //   }, (error) => {
+    //     console.error("Error fetching budgets:", error);
+    //   }
+    // );
+
+    // Bucket List Items
+    const bucketListQuery = query(collection(db, "bucketListItems"), orderBy("createdAt", "desc"));
+    const bucketListUnsub = onSnapshot(bucketListQuery, (snapshot) => {
+        const itemsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setBucketListItems(itemsData);
+      }, (error) => {
+        console.error("Error fetching bucket list items:", error);
+      }
+    );
+    
+    // Moved setLoading(false) to be called after initial data attempts.
+    // A more robust approach would use Promise.all if all initial loads are critical
+    // or set loading false after the primary content (transactions) loads.
+    // For simplicity, setting it here. If transactions fail, it will still be false.
+    Promise.all([
+        getDocs(transactionsQuery), // example of waiting for at least one fetch
+        // getDocs(collection(db, "tags")), // if tags also critical for initial view
+        // getDocs(bucketListQuery) // if bucketList also critical for initial view
+    ]).then(() => {
+        setLoading(false);
+    }).catch(() => {
+        setLoading(false); // also set loading false on error
+    });
+
+
+    return () => {
+      transactionsUnsub();
+      tagsUnsub();
+      // budgetsUnsub(); // budgetsUnsub is not defined if budget fetching is commented
+      bucketListUnsub();
+    };
   }, []);
   
-  // Save dark mode preference to localStorage
   useEffect(() => {
     localStorage.setItem("darkMode", JSON.stringify(isDarkMode));
+    // Remove the old class before adding the new one
+    document.body.classList.remove(isDarkMode ? 'light' : 'dark');
+    document.body.classList.add(isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
 
-  const calculateStatistics = (transactions) => {
-    // Calculate total income and expense
-    const totalIncome = transactions
-      .filter(t => t.type === "income")
-      .reduce((sum, t) => sum + Number(t.amount || 0), 0);
-      
-    const totalExpense = transactions
-      .filter(t => t.type === "expense")
-      .reduce((sum, t) => sum + Number(t.amount || 0), 0);
-    
-    // Calculate top expense categories (by tags)
+  const calculateStatistics = (transactionsData) => {
+    const totalIncome = transactionsData.filter(t => t.type === "income").reduce((sum, t) => sum + Number(t.amount || 0), 0);
+    const totalExpense = transactionsData.filter(t => t.type === "expense").reduce((sum, t) => sum + Number(t.amount || 0), 0);
     const expensesByTag = {};
-    transactions
-      .filter(t => t.type === "expense")
-      .forEach(transaction => {
+    transactionsData.filter(t => t.type === "expense").forEach(transaction => {
         if (transaction.tags && transaction.tags.length > 0) {
           transaction.tags.forEach(tag => {
-            if (!expensesByTag[tag]) {
-              expensesByTag[tag] = 0;
-            }
-            expensesByTag[tag] += Number(transaction.amount || 0);
+            expensesByTag[tag] = (expensesByTag[tag] || 0) + Number(transaction.amount || 0);
           });
         } else {
-          if (!expensesByTag["Uncategorized"]) {
-            expensesByTag["Uncategorized"] = 0;
-          }
-          expensesByTag["Uncategorized"] += Number(transaction.amount || 0);
+          expensesByTag["Uncategorized"] = (expensesByTag["Uncategorized"] || 0) + Number(transaction.amount || 0);
         }
       });
-    
-    // Convert to array and sort
-    const topExpenseCategories = Object.entries(expensesByTag)
-      .map(([tag, amount]) => ({ tag, amount }))
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 5);
-    
-    setStatistics({
-      totalIncome,
-      totalExpense,
-      topExpenseCategories
-    });
+    const topExpenseCategories = Object.entries(expensesByTag).map(([tag, amount]) => ({ tag, amount })).sort((a, b) => b.amount - a.amount).slice(0, 5);
+    setStatistics({ totalIncome, totalExpense, topExpenseCategories });
   };
 
-  const calculateBalance = (transactions) => {
-    const total = transactions.reduce((acc, transaction) => {
-      return transaction.type === "income" 
-        ? acc + Number(transaction.amount || 0)
-        : acc - Number(transaction.amount || 0);
-    }, 0);
+  const calculateBalance = (transactionsData) => {
+    const total = transactionsData.reduce((acc, transaction) => transaction.type === "income" ? acc + Number(transaction.amount || 0) : acc - Number(transaction.amount || 0), 0);
     setBalance(total);
   };
 
-  const toggleTheme = () => {
-    setIsDarkMode((prev) => !prev);
-  };
 
-  const handleTagChange = (e) => {
-    setNewTag(e.target.value);
-  };
+  const toggleTheme = () => setIsDarkMode(prev => !prev);
+  const handleTagChange = (e) => setNewTag(e.target.value);
 
   const addTag = async () => {
-    if (newTag.trim()) {
+    if (newTag.trim() && !tags.includes(newTag.trim())) {
       try {
-        await addDoc(collection(db, "tags"), {
-          name: newTag.trim()
-        });
+        await addDoc(collection(db, "tags"), { name: newTag.trim() });
         setNewTag("");
-      } catch (error) {
-        console.error("Error adding tag:", error);
-      }
+      } catch (error) { console.error("Error adding tag:", error); }
     }
   };
 
-  const removeTag = async (tag) => {
+  const removeTag = async (tagToRemove) => {
     try {
-      const q = query(collection(db, "tags"), where("name", "==", tag));
+      const q = query(collection(db, "tags"), where("name", "==", tagToRemove));
       const querySnapshot = await getDocs(q);
-      querySnapshot.forEach(async (doc) => {
-        await deleteDoc(doc.ref);
+      querySnapshot.forEach(async (docSnapshot) => {
+        await deleteDoc(doc(db, "tags", docSnapshot.id));
       });
-    } catch (error) {
-      console.error("Error removing tag:", error);
-    }
+    } catch (error) { console.error("Error removing tag:", error); }
   };
 
-  const handleTransactionTypeChange = (type) => {
-    setTransactionType(type);
-  };
+  const handleTransactionTypeChange = (type) => setTransactionType(type);
 
   const handleSubmitTransaction = async () => {
     if (amount && !isNaN(amount) && description.trim()) {
+      const transactionData = {
+        type: transactionType,
+        amount: Number(amount),
+        description: description.trim(),
+        tags: selectedTags,
+        date: selectedDate.toISOString(),
+        party: transactionParty.trim() || null, 
+      };
+
       try {
         if (editingTransaction) {
-          // Update existing transaction
           await updateDoc(doc(db, "transactions", editingTransaction.id), {
-            type: transactionType,
-            amount: Number(amount),
-            description: description.trim(),
-            tags: selectedTags,
-            updatedAt: new Date()
+            ...transactionData,
+            updatedAt: Timestamp.now()
           });
           setEditingTransaction(null);
         } else {
-          // Add new transaction
           await addDoc(collection(db, "transactions"), {
-            type: transactionType,
-            amount: Number(amount),
-            description: description.trim(),
-            tags: selectedTags,
-            date: selectedDate.toISOString(),
-            createdAt: new Date()
+            ...transactionData,
+            createdAt: Timestamp.now()
           });
         }
-        // Reset form
         setAmount("");
         setDescription("");
+        setTransactionParty("");
         setSelectedTags([]);
-        setTransactionType("income");
       } catch (error) {
         console.error("Error with transaction:", error);
       }
@@ -251,44 +381,36 @@ const App = () => {
     setAmount(transaction.amount);
     setDescription(transaction.description);
     setSelectedTags(transaction.tags || []);
-    
-    // Scroll to form
-    document.querySelector('.transaction-form-container').scrollIntoView({ 
-      behavior: 'smooth' 
-    });
+    setTransactionParty(transaction.party || "");
+    setSelectedDate(new Date(transaction.date || (transaction.createdAt?.toDate ? transaction.createdAt.toDate() : transaction.createdAt) ));
+    setActiveView("dashboard"); 
+    const formContainer = document.querySelector('.transaction-form-container');
+    if (formContainer) {
+        formContainer.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
   const deleteTransaction = async (id) => {
     if (window.confirm("Are you sure you want to delete this transaction?")) {
       try {
         await deleteDoc(doc(db, "transactions", id));
-      } catch (error) {
-        console.error("Error deleting transaction:", error);
-      }
+      } catch (error) { console.error("Error deleting transaction:", error); }
     }
   };
 
   const handleTagSelect = (tag) => {
-    setSelectedTags((prevTags) =>
-      prevTags.includes(tag)
-        ? prevTags.filter((t) => t !== tag)
-        : [...prevTags, tag]
-    );
+    setSelectedTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
   };
 
-  const handleFilterChange = (type) => {
-    setFilterType(type);
-  };
+  const handleFilterChange = (type) => setFilterType(type);
+  const handleFilterTagChange = (tag) => setFilterTag(prev => prev === tag ? "" : tag);
 
-  const handleFilterTagChange = (tag) => {
-    setFilterTag(tag === filterTag ? "" : tag);
-  };
-
+  // CORRECTED handleDateRangeChange
   const handleDateRangeChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value } = e.target; // FIX: Destructure name and value
     setDateRange(prev => ({
       ...prev,
-      [name]: value
+      [name]: value // FIX: Use destructured name
     }));
   };
 
@@ -298,41 +420,72 @@ const App = () => {
     setDateRange({ start: "", end: "" });
   };
 
-  // Calendar functions
-  const toggleCalendarVisibility = () => {
-    setCalendarVisible(prev => !prev);
-  };
-
+  const toggleCalendarVisibility = () => setCalendarVisible(prev => !prev);
   const handleDateClick = (day) => {
     const newDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
     setSelectedDate(newDate);
   };
-
   const changeMonth = (offset) => {
-    const newMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + offset, 1);
-    setCurrentMonth(newMonth);
+    setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + offset, 1));
   };
 
-  const renderCalendar = () => {
+  const handleAddBucketItem = async () => {
+    if (newBucketItemText.trim() === "") return;
+    try {
+      await addDoc(collection(db, "bucketListItems"), {
+        text: newBucketItemText.trim(),
+        notes: newBucketItemNotes.trim() || null,
+        isCompleted: false,
+        createdAt: Timestamp.now()
+      });
+      setNewBucketItemText("");
+      setNewBucketItemNotes("");
+    } catch (error) {
+      console.error("Error adding bucket list item:", error);
+    }
+  };
+
+  const handleUpdateBucketItem = async (id, updates) => {
+    try {
+      await updateDoc(doc(db, "bucketListItems", id), updates);
+    } catch (error) {
+      console.error("Error updating bucket list item:", error);
+    }
+  };
+
+  const handleDeleteBucketItem = async (id) => {
+    if (window.confirm("Delete this bucket list item?")) {
+      try {
+        await deleteDoc(doc(db, "bucketListItems", id));
+      } catch (error) {
+        console.error("Error deleting bucket list item:", error);
+      }
+    }
+  };
+  const handleToggleBucketItemComplete = async (id, isCompleted) => {
+     try {
+      await updateDoc(doc(db, "bucketListItems", id), { isCompleted });
+    } catch (error) {
+      console.error("Error toggling bucket list item completion:", error);
+    }
+  };
+
+  const renderCalendar = () => { 
     const month = currentMonth.getMonth();
     const year = currentMonth.getFullYear();
     const firstDayOfMonth = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     
-    const monthNames = [
-      "January", "February", "March", "April", "May", "June",
-      "July", "August", "September", "October", "November", "December"
-    ];
+    const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
     
     const days = [];
     for (let i = 0; i < firstDayOfMonth; i++) {
       days.push(<div key={`empty-${i}`} className="calendar-day empty"></div>);
     }
     
-    // Get transactions for this month to mark on calendar
     const transactionsThisMonth = transactions.filter(t => {
-      const tDate = new Date(t.date);
-      return tDate.getMonth() === month && tDate.getFullYear() === year;
+      const tDateObj = t.date ? new Date(t.date) : (t.createdAt?.toDate ? t.createdAt.toDate() : new Date(t.createdAt));
+      return tDateObj.getMonth() === month && tDateObj.getFullYear() === year;
     });
     
     for (let day = 1; day <= daysInMonth; day++) {
@@ -340,11 +493,13 @@ const App = () => {
                         selectedDate.getMonth() === month && 
                         selectedDate.getFullYear() === year;
       
-      // Check if day has transactions
-      const dateStr = new Date(year, month, day).toISOString().split('T')[0];
-      const hasTransactions = transactionsThisMonth.some(t => 
-        t.date.split('T')[0] === dateStr
-      );
+      const dateForDay = new Date(year, month, day);
+      const hasTransactions = transactionsThisMonth.some(t => {
+         const tDateObj = t.date ? new Date(t.date) : (t.createdAt?.toDate ? t.createdAt.toDate() : new Date(t.createdAt));
+         return tDateObj.getFullYear() === dateForDay.getFullYear() &&
+                tDateObj.getMonth() === dateForDay.getMonth() &&
+                tDateObj.getDate() === dateForDay.getDate();
+      });
       
       days.push(
         <div 
@@ -357,8 +512,7 @@ const App = () => {
         </div>
       );
     }
-    
-    return (
+     return (
       <div className="calendar">
         <div className="calendar-header">
           <button onClick={() => changeMonth(-1)}>←</button>
@@ -366,72 +520,60 @@ const App = () => {
           <button onClick={() => changeMonth(1)}>→</button>
         </div>
         <div className="calendar-days-header">
-          <div>Sun</div>
-          <div>Mon</div>
-          <div>Tue</div>
-          <div>Wed</div>
-          <div>Thu</div>
-          <div>Fri</div>
-          <div>Sat</div>
+          <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
         </div>
-        <div className="calendar-days">
-          {days}
-        </div>
+        <div className="calendar-days">{days}</div>
       </div>
     );
   };
 
-  const formatDate = (dateString) => {
-    const options = { 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    };
-    return new Date(dateString).toLocaleDateString(undefined, options);
-  };
+  const formatDate = (dateInput) => {
+    let date;
+    if (!dateInput) return "No Date";
 
-  const formatAmount = (amount) => {
-    const num = Number(amount);
+    if (dateInput instanceof Timestamp) {
+        date = dateInput.toDate();
+    } else if (typeof dateInput === 'string' || dateInput instanceof Date) {
+        date = new Date(dateInput);
+    } else {
+        return "Invalid Date Input"; 
+    }
+
+    if (isNaN(date.getTime())) { 
+        return "Invalid Date";
+    }
+
+    const options = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+    return date.toLocaleDateString(undefined, options);
+  };
+  const formatAmount = (amountVal) => {
+    const num = Number(amountVal);
     return !isNaN(num) ? num.toFixed(2) : "0.00";
   };
   
-  // Toggle mobile menu
-  const toggleMobileMenu = () => {
-    setIsMobileMenuOpen(prev => !prev);
-  };
+  // Commenting out unused mobile menu toggle
+  // const toggleMobileMenu = () => setIsMobileMenuOpen(prev => !prev);
 
-  // Filter transactions based on current filters
   const filteredTransactions = transactions.filter(transaction => {
-    // Filter by type
-    if (filterType !== "all" && transaction.type !== filterType) {
-      return false;
-    }
+    if (filterType !== "all" && transaction.type !== filterType) return false;
+    if (filterTag && (!transaction.tags || !transaction.tags.includes(filterTag))) return false;
     
-    // Filter by tag
-    if (filterTag && (!transaction.tags || !transaction.tags.includes(filterTag))) {
-      return false;
-    }
+    const transactionDateRaw = transaction.date || transaction.createdAt;
+    if (!transactionDateRaw) return true; // Or false, depending on how you want to handle missing dates
     
-    // Filter by date range
+    const transactionDate = transactionDateRaw.toDate ? transactionDateRaw.toDate() : new Date(transactionDateRaw);
+
     if (dateRange.start) {
-      const startDate = new Date(dateRange.start);
-      const transactionDate = new Date(transaction.date);
-      if (transactionDate < startDate) {
-        return false;
-      }
+        const startDate = new Date(dateRange.start);
+        // Reset time part of startDate for day-based comparison
+        startDate.setHours(0,0,0,0);
+        if (transactionDate < startDate) return false;
     }
-    
     if (dateRange.end) {
       const endDate = new Date(dateRange.end);
-      endDate.setHours(23, 59, 59, 999); // End of day
-      const transactionDate = new Date(transaction.date);
-      if (transactionDate > endDate) {
-        return false;
-      }
+      endDate.setHours(23, 59, 59, 999); 
+      if (transactionDate > endDate) return false;
     }
-    
     return true;
   });
 
@@ -445,68 +587,54 @@ const App = () => {
   }
 
   return (
+    // JSX remains the same as the previous correct version
+    // Ensure the `name` attribute is present on your date input fields if it wasn't already
+    // e.g., <input type="date" name="start" ... />
+    // The JSX provided in the previous step was correct in this regard.
     <div className={`app ${isDarkMode ? "dark" : "light"}`}>
-      {/* Navbar */}
       <nav className="navbar">
-        <div className="navbar-brand">
-          <h1>My-Money</h1>
+        <div className="navbar-brand"><h1>My-Money</h1></div>
+        <div className="navbar-links">
+            <button onClick={() => setActiveView("dashboard")} className={activeView === 'dashboard' ? 'active' : ''}>Dashboard</button>
+            <button onClick={() => setActiveView("overview")} className={activeView === 'overview' ? 'active' : ''}>Monthly Overview</button>
+            <button onClick={() => setActiveView("bucketlist")} className={activeView === 'bucketlist' ? 'active' : ''}>Bucket List</button>
         </div>
         <div className="navbar-actions">
           <button className="theme-toggle" onClick={toggleTheme}>
             {isDarkMode ? "🌞" : "🌙"}
           </button>
-          
         </div>
       </nav>
 
-      {/* Sidebar */}
       <div className="sidebar">
-        <div className="balance-card">
+        <div className="balance-card card-style">
           <h3>Total Balance</h3>
           <div className="balance-amount">
             <span>{CURRENCY.symbol}{formatAmount(balance)}</span>
           </div>
           <div className="balance-summary">
-            <div className="income-summary">
-              <span>Income</span>
-              <span>{CURRENCY.symbol}{formatAmount(statistics.totalIncome)}</span>
-            </div>
-            <div className="expense-summary">
-              <span>Expense</span>
-              <span>{CURRENCY.symbol}{formatAmount(statistics.totalExpense)}</span>
-            </div>
+            <div className="income-summary"><span>Income</span><span>{CURRENCY.symbol}{formatAmount(statistics.totalIncome)}</span></div>
+            <div className="expense-summary"><span>Expense</span><span>{CURRENCY.symbol}{formatAmount(statistics.totalExpense)}</span></div>
           </div>
         </div>
-
-        <div className="tags-section">
-          <div className="tags-header">
-            <h3>Tags</h3>
-          </div>
+        <div className="tags-section card-style">
+          <div className="tags-header"><h3>Tags</h3></div>
           <div className="tag-input">
-            <input
-              type="text"
-              value={newTag}
-              onChange={handleTagChange}
-              placeholder="Add new tag"
-            />
+            <input type="text" value={newTag} onChange={handleTagChange} placeholder="Add new tag"/>
             <button onClick={addTag}>Add</button>
           </div>
           <div className="tag-list">
             {tags.map((tag, index) => (
               <div key={index} className="tag-container">
-                <span
-                  className={`tag ${selectedTags.includes(tag) ? "active" : ""} ${filterTag === tag ? "active" : ""}`}
-                  onClick={() => handleTagSelect(tag)}
-                >
+                <span className={`tag ${selectedTags.includes(tag) ? "active" : ""} ${filterTag === tag ? "filter-active" : ""}`}
+                      onClick={() => {
+                        // When clicking a tag in the sidebar, it should be for selecting it for a new transaction,
+                        // not for filtering the main list directly. Filter click is on tags in transaction items.
+                        handleTagSelect(tag);
+                      }}>
                   {tag}
                 </span>
-                <button
-                  className="delete-tag"
-                  onClick={() => removeTag(tag)}
-                  title="Remove tag"
-                >
-                  ✕
-                </button>
+                <button className="delete-tag" onClick={() => removeTag(tag)} title="Remove tag">✕</button>
               </div>
             ))}
           </div>
@@ -514,209 +642,159 @@ const App = () => {
       </div>
 
       <div className="main-content">
-        {/* Calendar */}
-        <div className="calendar-container">
-          <div className="calendar-toggle" onClick={toggleCalendarVisibility}>
-            <h2>Calendar {calendarVisible ? "▼" : "▶"}</h2>
-            <span>{selectedDate.toDateString()}</span>
-          </div>
-          {calendarVisible && renderCalendar()}
-        </div>
-
-        {/* Transaction Form */}
-        <div className="transaction-form-container">
-          <div className="transaction-form">
-            <h2>{editingTransaction ? "Edit Transaction" : "New Transaction"}</h2>
-
-            <div className="type-toggle">
-              <button
-                className={`toggle-btn ${transactionType === "income" ? "active income" : ""}`}
-                onClick={() => handleTransactionTypeChange("income")}
-              >
-                💰 Income
-              </button>
-              <button
-                className={`toggle-btn ${transactionType === "expense" ? "active expense" : ""}`}
-                onClick={() => handleTransactionTypeChange("expense")}
-              >
-                💸 Expense
-              </button>
-            </div>
-
-            <div className="form-group">
-              <label>Amount ({CURRENCY.symbol})</label>
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="Enter amount"
-              />
-            </div>
-            <div className="form-group">
-              <label>Description</label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Enter description"
-                className="description-input"
-              ></textarea>
-            </div>
-
-            {selectedTags.length > 0 && (
-              <div className="selected-tags">
-                <label>Selected Tags:</label>
-                <div className="tags-list">
-                  {selectedTags.map((tag, index) => (
-                    <span 
-                      key={index} 
-                      className="tag active"
-                      onClick={() => handleTagSelect(tag)}
-                    >
-                      {tag} ✕
-                    </span>
-                  ))}
-                </div>
+        {activeView === "dashboard" && (
+          <>
+            <div className="calendar-container card-style">
+              <div className="calendar-toggle" onClick={toggleCalendarVisibility}>
+                <h2>Calendar {calendarVisible ? "▼" : "▶"}</h2>
+                <span>{selectedDate.toDateString()}</span>
               </div>
-            )}
-
-            <button className="submit-btn" onClick={handleSubmitTransaction}>
-              {editingTransaction 
-                ? "Update Transaction" 
-                : transactionType === "income" ? "Add Income" : "Add Expense"}
-            </button>
-            
-            {editingTransaction && (
-              <button 
-                className="cancel-btn" 
-                onClick={() => {
-                  setEditingTransaction(null);
-                  setAmount("");
-                  setDescription("");
-                  setSelectedTags([]);
-                  setTransactionType("income");
-                }}
-              >
-                Cancel Editing
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Transactions List */}
-        <div className="transactions-container">
-          <div className="transactions-header">
-            <h2>Transactions</h2>
-            <div className="filters">
-              <div className="filter-group">
-                <span>Type:</span>
-                <button 
-                  className={`filter-btn ${filterType === "all" ? "active" : ""}`}
-                  onClick={() => handleFilterChange("all")}
-                >
-                  All
-                </button>
-                <button 
-                  className={`filter-btn ${filterType === "income" ? "active income" : ""}`}
-                  onClick={() => handleFilterChange("income")}
-                >
-                  Income
-                </button>
-                <button 
-                  className={`filter-btn ${filterType === "expense" ? "active expense" : ""}`}
-                  onClick={() => handleFilterChange("expense")}
-                >
-                  Expense
-                </button>
-              </div>
-              
-              <div className="filter-group">
-                <span>Date:</span>
-                <input 
-                  type="date"
-                  name="start"
-                  value={dateRange.start}
-                  onChange={handleDateRangeChange}
-                  placeholder="Start date"
-                />
-                <input 
-                  type="date"
-                  name="end"
-                  value={dateRange.end}
-                  onChange={handleDateRangeChange}
-                  placeholder="End date"
-                />
-              </div>
-              
-              <button className="reset-filters" onClick={resetFilters}>
-                Reset Filters
-              </button>
+              {calendarVisible && renderCalendar()}
             </div>
-          </div>
-          
-          <div className="transactions-list">
-            {filteredTransactions.length === 0 ? (
-              <div className="no-transactions">No transactions found with the current filters.</div>
-            ) : (
-              [...filteredTransactions]
-                .sort((a, b) => {
-                  // Sort by date (newest first)
-                  const dateA = new Date(a.date || a.createdAt);
-                  const dateB = new Date(b.date || b.createdAt);
-                  return dateB - dateA;
-                })
-                .map((transaction) => (
-                <div key={transaction.id} className={`transaction ${transaction.type}`}>
-                  <div className="transaction-icon">
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <circle cx="12" cy="12" r="12" fill={transaction.type === "income" ? "var(--income)" : "var(--expense)"} />
-                      {transaction.type === "income" ? (
-                        <path d="M7 13L12 8L17 13" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      ) : (
-                        <path d="M7 11L12 16L17 11" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      )}
-                    </svg>
-                  </div>
-                  <div className="transaction-details">
-                    <div className="transaction-description">{transaction.description}</div>
-                    <div className="transaction-tags">
-                      {transaction.tags && transaction.tags.map((tag, index) => (
-                        <span 
-                          key={index} 
-                          className="tag"
-                          onClick={() => handleFilterTagChange(tag)}
-                        >
-                          {tag}
+
+            <div className="transaction-form-container card-style">
+              <h2>{editingTransaction ? "Edit Transaction" : "New Transaction"}</h2>
+              <div className="type-toggle">
+                <button className={`toggle-btn ${transactionType === "income" ? "active income" : ""}`} onClick={() => handleTransactionTypeChange("income")}>💰 Income</button>
+                <button className={`toggle-btn ${transactionType === "expense" ? "active expense" : ""}`} onClick={() => handleTransactionTypeChange("expense")}>💸 Expense</button>
+              </div>
+              <div className="form-group">
+                <label>Amount ({CURRENCY.symbol})</label>
+                <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Enter amount"/>
+              </div>
+              <div className="form-group">
+                <label>Description</label>
+                <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Enter description" className="description-input"></textarea>
+              </div>
+              <div className="form-group">
+                <label>{transactionType === "income" ? "Received From (Optional)" : "Paid To (Optional)"}</label>
+                <input type="text" value={transactionParty} onChange={(e) => setTransactionParty(e.target.value)} placeholder={transactionType === "income" ? "e.g., Client, Salary" : "e.g., Supermarket, Rent"}/>
+              </div>
+               <div className="form-group"> {/* Adding section to click available tags */}
+                <label>Available Tags (click to add):</label>
+                <div className="tag-list">
+                    {tags.filter(t => !selectedTags.includes(t)).map((tag, index) => (
+                        <span key={index} className="tag available-tag" onClick={() => handleTagSelect(tag)}>
+                            {tag}
                         </span>
-                      ))}
-                    </div>
-                    <div className="transaction-date">{formatDate(transaction.date || transaction.createdAt)}</div>
-                  </div>
-                  <div className="transaction-amount">
-                    <span>
-                      {transaction.type === "income" ? "+" : "-"}{CURRENCY.symbol}{formatAmount(transaction.amount)}
-                    </span>
-                  </div>
-                  <div className="transaction-actions">
-                    <button 
-                      className="edit-btn" 
-                      onClick={() => editTransaction(transaction)}
-                      title="Edit"
-                    >
-                      ✏️
-                    </button>
-                    <button 
-                      className="delete-btn" 
-                      onClick={() => deleteTransaction(transaction.id)}
-                      title="Delete"
-                    >
-                      🗑️
-                    </button>
+                    ))}
+                </div>
+              </div>
+              {selectedTags.length > 0 && (
+                <div className="selected-tags">
+                  <label>Selected Tags:</label>
+                  <div className="tags-list">
+                    {selectedTags.map((tag, index) => (
+                      <span key={index} className="tag active" onClick={() => handleTagSelect(tag)}>{tag} ✕</span>
+                    ))}
                   </div>
                 </div>
-              ))
-            )}
+              )}
+              <button className="submit-btn" onClick={handleSubmitTransaction}>
+                {editingTransaction ? "Update Transaction" : transactionType === "income" ? "Add Income" : "Add Expense"}
+              </button>
+              {editingTransaction && (
+                <button className="cancel-btn" onClick={() => { setEditingTransaction(null); setAmount(""); setDescription(""); setTransactionParty(""); setSelectedTags([]); setTransactionType("income"); }}>
+                  Cancel Editing
+                </button>
+              )}
+            </div>
+
+            <div className="transactions-container card-style">
+              <div className="transactions-header">
+                <h2>Transactions</h2>
+                <div className="filters">
+                    <div className="filter-group">
+                        <span>Type:</span>
+                        <button className={`filter-btn ${filterType === "all" ? "active" : ""}`} onClick={() => handleFilterChange("all")}>All</button>
+                        <button className={`filter-btn ${filterType === "income" ? "active income" : ""}`} onClick={() => handleFilterChange("income")}>Income</button>
+                        <button className={`filter-btn ${filterType === "expense" ? "active expense" : ""}`} onClick={() => handleFilterChange("expense")}>Expense</button>
+                    </div>
+                    <div className="filter-group"> {/* Ensure date inputs have name attributes */}
+                        <span>Date:</span>
+                        <input type="date" name="start" value={dateRange.start} onChange={handleDateRangeChange} />
+                        <input type="date" name="end" value={dateRange.end} onChange={handleDateRangeChange} />
+                    </div>
+                    <button className="reset-filters" onClick={resetFilters}>Reset Filters</button>
+                </div>
+              </div>
+              <div className="transactions-list">
+                {filteredTransactions.length === 0 ? (
+                  <div className="no-transactions">No transactions found.</div>
+                ) : (
+                  filteredTransactions.map((transaction) => (
+                    <div key={transaction.id} className={`transaction ${transaction.type}`}>
+                      <div className="transaction-icon">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <circle cx="12" cy="12" r="12" fill={transaction.type === "income" ? "var(--income)" : "var(--expense)"} />
+                          {transaction.type === "income" ? (
+                            <path d="M7 13L12 8L17 13" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          ) : (
+                            <path d="M7 11L12 16L17 11" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          )}
+                        </svg>
+                      </div>
+                      <div className="transaction-details">
+                        <div className="transaction-description">{transaction.description}</div>
+                        {transaction.party && <div className="transaction-party"><em>{transaction.type === "income" ? "From: " : "To: "}</em>{transaction.party}</div>}
+                        <div className="transaction-tags">
+                          {transaction.tags && transaction.tags.map((tag, index) => (
+                            <span key={index} className={`tag ${filterTag === tag ? "filter-active" : ""}`} onClick={() => handleFilterTagChange(tag)}>{tag}</span>
+                          ))}
+                        </div>
+                        <div className="transaction-date">{formatDate(transaction.date || transaction.createdAt)}</div>
+                      </div>
+                      <div className="transaction-amount">
+                        <span>{transaction.type === "income" ? "+" : "-"}{CURRENCY.symbol}{formatAmount(transaction.amount)}</span>
+                      </div>
+                      <div className="transaction-actions">
+                        <button className="edit-btn" onClick={() => editTransaction(transaction)} title="Edit">✏️</button>
+                        <button className="delete-btn" onClick={() => deleteTransaction(transaction.id)} title="Delete">🗑️</button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </>
+        )}
+
+        {activeView === "overview" && (
+          <MonthlyOverviewDiagram transactions={transactions} currentMonthDate={currentMonth} />
+        )}
+
+        {activeView === "bucketlist" && (
+          <div className="bucket-list-section card-style">
+            <h2>My Bucket List</h2>
+            <div className="add-bucket-item-form">
+              <input
+                type="text"
+                value={newBucketItemText}
+                onChange={(e) => setNewBucketItemText(e.target.value)}
+                placeholder="New bucket list item..."
+              />
+              <textarea
+                value={newBucketItemNotes}
+                onChange={(e) => setNewBucketItemNotes(e.target.value)}
+                placeholder="Notes (optional)..."
+              />
+              <button onClick={handleAddBucketItem} className="add-btn">Add Item</button>
+            </div>
+            <div className="bucket-items-display">
+              {bucketListItems.length === 0 ? <p>Your bucket list is empty. Add something you aspire to!</p> :
+                bucketListItems.map(item => (
+                  <BucketListItem 
+                    key={item.id} 
+                    item={item} 
+                    onUpdate={handleUpdateBucketItem}
+                    onDelete={handleDeleteBucketItem}
+                    onToggleComplete={handleToggleBucketItemComplete}
+                  />
+                ))
+              }
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

@@ -798,4 +798,262 @@ input:focus, textarea:focus {
   .type-toggle {
     flex-direction: column;
   }
+/* Add to your existing App.css */
+
+/* Navbar Links for Active View */
+.navbar-links {
+  display: flex;
+  gap: 0.5rem; /* Add some space between nav buttons */
+  align-items: center;
+  margin: 0 auto; /* Center links if space allows */
+}
+
+.navbar-links button {
+  background: none;
+  border: 2px solid transparent;
+  color: var(--text-on-accent);
+  padding: 0.5em 1em;
+  font-size: 1em;
+  border-radius: 6px;
+}
+
+.navbar-links button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.navbar-links button.active {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-bottom-color: var(--text-on-accent); /* Or a different highlight */
+  font-weight: bold;
+}
+
+
+/* Shared Card Style for new sections */
+.card-style {
+  background-color: var(--surface-primary);
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 12px var(--shadow-strong-color);
+}
+/* Apply card-style to existing containers that should have it */
+.balance-card, .tags-section, .calendar-container, 
+.transaction-form-container, .transactions-container {
+  /* Ensure these already have card-style properties or add .card-style class to their JSX */
+}
+
+
+/* Monthly Overview Diagram */
+.monthly-overview-container h2 {
+  text-align: center;
+  color: var(--accent-primary);
+  margin-bottom: 1rem;
+}
+.monthly-overview-container p {
+  text-align: center;
+  color: var(--text-secondary);
+  margin-bottom: 1.5rem;
+}
+/* Chart.js canvas styling is mostly handled by the library, but container might need width/height */
+/* The style={{ height: "300px" }} on the canvas wrapper div is a good start */
+
+
+/* Bucket List Section */
+.bucket-list-section h2 {
+  text-align: center;
+  color: var(--accent-primary);
+  margin-bottom: 1.5rem;
+}
+
+.add-bucket-item-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background-color: var(--bg-secondary); /* Slightly different background */
+  border-radius: 6px;
+}
+
+.add-bucket-item-form input[type="text"],
+.add-bucket-item-form textarea {
+  width: 100%;
+}
+.add-bucket-item-form textarea {
+  min-height: 60px;
+  resize: vertical;
+}
+
+.add-bucket-item-form .add-btn {
+  background-color: var(--accent-secondary); /* Popsicle stick brown */
+  color: var(--text-on-accent);
+  align-self: flex-start;
+}
+.add-bucket-item-form .add-btn:hover {
+  background-color: #8B4513; /* Darker Sienna */
+}
+
+.bucket-items-display {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.bucket-list-item {
+  background-color: var(--bg-secondary);
+  padding: 1rem;
+  border-radius: 6px;
+  border-left: 4px solid var(--accent-primary);
+  transition: background-color 0.2s ease;
+}
+
+.bucket-list-item.completed {
+  border-left-color: var(--income); /* Use income color for completed */
+  background-color: var(--surface-secondary); /* Lighter, completed feel */
+}
+.bucket-list-item.completed .item-text {
+  text-decoration: line-through;
+  color: var(--text-secondary);
+}
+
+
+.bucket-item-view {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start; /* Align items to top for multi-line notes */
+  gap: 0.5rem;
+}
+
+.item-content {
+  flex-grow: 1;
+  cursor: pointer; /* For toggling complete */
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.item-checkbox { /* Style the checkbox a bit */
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent-primary);
+}
+
+.item-text {
+  font-size: 1.1em;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.item-notes {
+  font-size: 0.9em;
+  color: var(--text-secondary);
+  margin-top: 0.3rem;
+  margin-left: 23px; /* Align with text if checkbox is present */
+  white-space: pre-wrap; /* Preserve line breaks in notes */
+}
+
+.bucket-list-item .actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0; /* Prevent actions from shrinking */
+}
+.bucket-list-item .actions button {
+  background: none;
+  border: none;
+  font-size: 1.1em;
+  color: var(--text-secondary);
+}
+.bucket-list-item .actions .edit-btn:hover { color: var(--accent-primary); }
+.bucket-list-item .actions .delete-btn:hover { color: var(--expense); }
+
+
+.bucket-item-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.bucket-item-edit-form .actions {
+  align-self: flex-start;
+  margin-top: 0.5rem;
+}
+.bucket-item-edit-form .save-btn {
+  background-color: var(--income);
+  color: var(--text-on-accent);
+}
+.bucket-item-edit-form .cancel-btn {
+  background-color: var(--surface-secondary);
+  color: var(--text-primary);
+}
+
+
+/* Transaction Party (From/To) details */
+.transaction-party {
+  font-size: 0.85em;
+  color: var(--text-secondary);
+  margin: 0.2rem 0 0.3rem;
+}
+.transaction-party em {
+  font-style: normal;
+  font-weight: 500;
+  color: var(--text-primary); /* Make "From:" / "To:" slightly more prominent */
+}
+
+/* Ensure tags in selected tags list also use filter-active if it's being filtered */
+.tag.filter-active {
+  outline: 2px solid var(--accent-secondary);
+  outline-offset: 1px;
+}
+
+/* Responsive adjustments for Navbar links */
+@media (max-width: 768px) {
+  .navbar {
+    flex-direction: column; /* Stack elements in navbar on small screens */
+    padding: 0.5rem 1rem;
+  }
+  .navbar-brand {
+    margin-bottom: 0.5rem;
+  }
+  .navbar-links {
+    order: 3; /* Put links below actions on mobile if desired */
+    width: 100%;
+    justify-content: space-around;
+    padding: 0.5rem 0;
+    flex-wrap: wrap; /* Allow nav links to wrap */
+  }
+  .navbar-links button {
+    font-size: 0.9em;
+    padding: 0.4em 0.6em;
+  }
+  .navbar-actions {
+    order: 2;
+    position: absolute; /* Example to move theme toggle to top right */
+    top: 10px;
+    right: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .navbar-links button {
+    flex-basis: 45%; /* Two buttons per row roughly */
+    text-align: center;
+    margin-bottom: 0.3rem;
+  }
+}
+
+/* Add to your App.css */
+.available-tag {
+  cursor: pointer;
+  background-color: var(--tag-bg); /* Or a slightly different one to distinguish */
+  color: var(--tag-text);
+  padding: 0.3em 0.6em;
+  border-radius: 12px;
+  margin: 0.2em;
+  display: inline-block;
+  transition: background-color 0.2s ease;
+}
+
+.available-tag:hover {
+  background-color: var(--accent-secondary); /* Or var(--tag-active-bg) */
+  color: var(--text-on-accent); /* Or var(--tag-active-text) */
+}
+  
 }
