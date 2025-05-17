@@ -15,8 +15,7 @@ import "./App.css";
 
 const CURRENCY = {
   symbol: "₹",
-  code: "INR",
-  exchangeRate: 75 // Approximate USD to INR conversion rate
+  code: "INR"
 };
 
 const App = () => {
@@ -24,6 +23,7 @@ const App = () => {
     const savedMode = localStorage.getItem("darkMode");
     return savedMode ? JSON.parse(savedMode) : false;
   });
+
   const [tags, setTags] = useState([]);
   const [newTag, setNewTag] = useState("");
   const [transactions, setTransactions] = useState([]);
@@ -43,12 +43,15 @@ const App = () => {
     topExpenseCategories: []
   });
   
+
+
   // Calendar state
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [calendarVisible, setCalendarVisible] = useState(true);
   
-  // New state for budget features
+  // New state 
+  // for budget features
   const [budgets, setBudgets] = useState([]);
   const [newBudget, setNewBudget] = useState({
     category: "",
@@ -70,6 +73,7 @@ const App = () => {
               id: doc.id,
               ...doc.data()
             }));
+
             setTransactions(transactionsData);
             calculateBalance(transactionsData);
             calculateStatistics(transactionsData);
@@ -451,12 +455,7 @@ const App = () => {
           <button className="theme-toggle" onClick={toggleTheme}>
             {isDarkMode ? "🌞" : "🌙"}
           </button>
-          <button 
-            className="mobile-menu-toggle" 
-            onClick={toggleMobileMenu}
-          >
-            ☰
-          </button>
+          
         </div>
       </nav>
 
