@@ -15,17 +15,16 @@ import {
 import { db } from "./firebase";
 import { Chart, registerables } from 'chart.js/auto'; // Import Chart.js
 import "./App.css";
+import { Settings } from "lucide-react";
 
 Chart.register(...registerables); // Register all Chart.js components
-
 const CURRENCY = {
   symbol: "₹",
   code: "INR"
 };
 
-// --- Helper Components (MonthlyOverviewDiagram, BucketListItem - remain the same as previous response) ---
 
-// Monthly Overview Diagram Component
+//Monthly Overview Diagram Component
 const MonthlyOverviewDiagram = ({ transactions, currentMonthDate }) => {
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
@@ -123,7 +122,7 @@ const MonthlyOverviewDiagram = ({ transactions, currentMonthDate }) => {
   );
 };
 
-// Bucket List Item Component
+//Bucket List Item Component
 const BucketListItem = ({ item, onUpdate, onDelete, onToggleComplete }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(item.text);
@@ -178,7 +177,7 @@ const App = () => {
     const savedMode = localStorage.getItem("darkMode");
     return savedMode ? JSON.parse(savedMode) : false;
   });
-
+  const [showMenu, setShowMenu] = useState(false);
   const [tags, setTags] = useState([]);
   const [newTag, setNewTag] = useState("");
   const [transactions, setTransactions] = useState([]);
@@ -198,18 +197,11 @@ const App = () => {
     totalExpense: 0,
     topExpenseCategories: []
   });
-  
+  const [activeSection, setActiveSection] = useState("overview"); // Default to overview
+
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [currentMonth, setCurrentMonth] = useState(new Date()); // For calendar and overview
+  const [currentMonth, setCurrentMonth] = useState(new Date()); 
   const [calendarVisible, setCalendarVisible] = useState(true);
-  
-  // Commenting out unused budget states to clear warnings
-  // const [budgets, setBudgets] = useState([]); 
-  // const [newBudget, setNewBudget] = useState({ category: "", amount: "", period: "monthly" });
-  // const [showBudgetModal, setShowBudgetModal] = useState(false);
-  
-  // Commenting out unused mobile menu state
-  // const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeView, setActiveView] = useState("dashboard"); // 'dashboard', 'overview', 'bucketlist'
 
   // Bucket List State
@@ -244,16 +236,6 @@ const App = () => {
         console.error("Error fetching tags:", error);
       }
     );
-    
-    // Commenting out budget fetching as it's unused
-    // const budgetsUnsub = onSnapshot(collection(db, "budgets"), (snapshot) => {
-    //     const budgetsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    //     // setBudgets(budgetsData); // budgets state is commented out
-    //   }, (error) => {
-    //     console.error("Error fetching budgets:", error);
-    //   }
-    // );
-
     // Bucket List Items
     const bucketListQuery = query(collection(db, "bucketListItems"), orderBy("createdAt", "desc"));
     const bucketListUnsub = onSnapshot(bucketListQuery, (snapshot) => {
@@ -263,33 +245,22 @@ const App = () => {
         console.error("Error fetching bucket list items:", error);
       }
     );
-    
-    // Moved setLoading(false) to be called after initial data attempts.
-    // A more robust approach would use Promise.all if all initial loads are critical
-    // or set loading false after the primary content (transactions) loads.
-    // For simplicity, setting it here. If transactions fail, it will still be false.
     Promise.all([
-        getDocs(transactionsQuery), // example of waiting for at least one fetch
-        // getDocs(collection(db, "tags")), // if tags also critical for initial view
-        // getDocs(bucketListQuery) // if bucketList also critical for initial view
+        getDocs(transactionsQuery), 
     ]).then(() => {
         setLoading(false);
     }).catch(() => {
         setLoading(false); // also set loading false on error
     });
-
-
     return () => {
       transactionsUnsub();
       tagsUnsub();
-      // budgetsUnsub(); // budgetsUnsub is not defined if budget fetching is commented
       bucketListUnsub();
     };
   }, []);
   
   useEffect(() => {
     localStorage.setItem("darkMode", JSON.stringify(isDarkMode));
-    // Remove the old class before adding the new one
     document.body.classList.remove(isDarkMode ? 'light' : 'dark');
     document.body.classList.add(isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
@@ -586,26 +557,30 @@ const App = () => {
     );
   }
 
-  return (
-    // JSX remains the same as the previous correct version
-    // Ensure the `name` attribute is present on your date input fields if it wasn't already
-    // e.g., <input type="date" name="start" ... />
-    // The JSX provided in the previous step was correct in this regard.
-    <div className={`app ${isDarkMode ? "dark" : "light"}`}>
-      <nav className="navbar">
-        <div className="navbar-brand"><h1>My-Money</h1></div>
-        <div className="navbar-links">
-            <button onClick={() => setActiveView("dashboard")} className={activeView === 'dashboard' ? 'active' : ''}>Dashboard</button>
-            <button onClick={() => setActiveView("overview")} className={activeView === 'overview' ? 'active' : ''}>Monthly Overview</button>
-            <button onClick={() => setActiveView("bucketlist")} className={activeView === 'bucketlist' ? 'active' : ''}>Bucket List</button>
-        </div>
-        <div className="navbar-actions">
-          <button className="theme-toggle" onClick={toggleTheme}>
-            {isDarkMode ? "🌞" : "🌙"}
-          </button>
-        </div>
-      </nav>
+  // function app({ activeView, setActiveView, activeSection, setActiveSection }) {
+  //   const [showMenu, setShowMenu] = useState(false);
 
+  return (
+    <div className="app">
+     <nav className="navbar">
+  <div className="navbar-brand">EXPANSIO</div>
+
+  <div className="navbar-settings">
+    <button className="gear-button" onClick={() => setShowMenu(!showMenu)}>⚙️</button>
+
+    {showMenu && (
+      <div className="dropdown-menu">
+        <button onClick={() => setActiveView("dashboard")}>📊 Dashboard</button>
+        <button onClick={() => setActiveView("overview")}>📅 Monthly Overview</button>
+        <button onClick={() => setActiveView("bucketlist")}>🎯 Bucket List</button>
+        <button onClick={() => setActiveSection("transactions")}>💳 Transactions</button>
+      </div>
+    )}
+  </div>
+</nav>
+
+
+      {/* Sidebar Balance Summary */}
       <div className="sidebar">
         <div className="balance-card card-style">
           <h3>Total Balance</h3>
@@ -613,35 +588,21 @@ const App = () => {
             <span>{CURRENCY.symbol}{formatAmount(balance)}</span>
           </div>
           <div className="balance-summary">
-            <div className="income-summary"><span>Income</span><span>{CURRENCY.symbol}{formatAmount(statistics.totalIncome)}</span></div>
-            <div className="expense-summary"><span>Expense</span><span>{CURRENCY.symbol}{formatAmount(statistics.totalExpense)}</span></div>
-          </div>
-        </div>
-        <div className="tags-section card-style">
-          <div className="tags-header"><h3>Tags</h3></div>
-          <div className="tag-input">
-            <input type="text" value={newTag} onChange={handleTagChange} placeholder="Add new tag"/>
-            <button onClick={addTag}>Add</button>
-          </div>
-          <div className="tag-list">
-            {tags.map((tag, index) => (
-              <div key={index} className="tag-container">
-                <span className={`tag ${selectedTags.includes(tag) ? "active" : ""} ${filterTag === tag ? "filter-active" : ""}`}
-                      onClick={() => {
-                        // When clicking a tag in the sidebar, it should be for selecting it for a new transaction,
-                        // not for filtering the main list directly. Filter click is on tags in transaction items.
-                        handleTagSelect(tag);
-                      }}>
-                  {tag}
-                </span>
-                <button className="delete-tag" onClick={() => removeTag(tag)} title="Remove tag">✕</button>
-              </div>
-            ))}
+            <div className="income-summary">
+              <span>Income</span>
+              <span>{CURRENCY.symbol}{formatAmount(statistics.totalIncome)}</span>
+            </div>
+            <div className="expense-summary">
+              <span>Expense</span>
+              <span>{CURRENCY.symbol}{formatAmount(statistics.totalExpense)}</span>
+            </div>
           </div>
         </div>
       </div>
-
+  
+      {/* Main Content */}
       <div className="main-content">
+        {/* Dashboard View */}
         {activeView === "dashboard" && (
           <>
             <div className="calendar-container card-style">
@@ -651,118 +612,121 @@ const App = () => {
               </div>
               {calendarVisible && renderCalendar()}
             </div>
-
+  
             <div className="transaction-form-container card-style">
               <h2>{editingTransaction ? "Edit Transaction" : "New Transaction"}</h2>
+  
               <div className="type-toggle">
-                <button className={`toggle-btn ${transactionType === "income" ? "active income" : ""}`} onClick={() => handleTransactionTypeChange("income")}>💰 Income</button>
-                <button className={`toggle-btn ${transactionType === "expense" ? "active expense" : ""}`} onClick={() => handleTransactionTypeChange("expense")}>💸 Expense</button>
+                <button
+                  className={`toggle-btn ${transactionType === "income" ? "active income" : ""}`}
+                  onClick={() => handleTransactionTypeChange("income")}
+                >
+                  💰 Income
+                </button>
+                <button
+                  className={`toggle-btn ${transactionType === "expense" ? "active expense" : ""}`}
+                  onClick={() => handleTransactionTypeChange("expense")}
+                >
+                  💸 Expense
+                </button>
               </div>
+  
               <div className="form-group">
                 <label>Amount ({CURRENCY.symbol})</label>
-                <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Enter amount"/>
+                <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Enter amount" />
               </div>
+  
               <div className="form-group">
                 <label>Description</label>
-                <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Enter description" className="description-input"></textarea>
+                <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Enter description" className="description-input" />
               </div>
-              <div className="form-group">
-                <label>{transactionType === "income" ? "Received From (Optional)" : "Paid To (Optional)"}</label>
-                <input type="text" value={transactionParty} onChange={(e) => setTransactionParty(e.target.value)} placeholder={transactionType === "income" ? "e.g., Client, Salary" : "e.g., Supermarket, Rent"}/>
-              </div>
-               <div className="form-group"> {/* Adding section to click available tags */}
-                <label>Available Tags (click to add):</label>
-                <div className="tag-list">
-                    {tags.filter(t => !selectedTags.includes(t)).map((tag, index) => (
-                        <span key={index} className="tag available-tag" onClick={() => handleTagSelect(tag)}>
-                            {tag}
-                        </span>
-                    ))}
-                </div>
-              </div>
-              {selectedTags.length > 0 && (
-                <div className="selected-tags">
-                  <label>Selected Tags:</label>
-                  <div className="tags-list">
-                    {selectedTags.map((tag, index) => (
-                      <span key={index} className="tag active" onClick={() => handleTagSelect(tag)}>{tag} ✕</span>
-                    ))}
-                  </div>
-                </div>
-              )}
+  
               <button className="submit-btn" onClick={handleSubmitTransaction}>
                 {editingTransaction ? "Update Transaction" : transactionType === "income" ? "Add Income" : "Add Expense"}
               </button>
+  
               {editingTransaction && (
-                <button className="cancel-btn" onClick={() => { setEditingTransaction(null); setAmount(""); setDescription(""); setTransactionParty(""); setSelectedTags([]); setTransactionType("income"); }}>
+                <button className="cancel-btn" onClick={() => {
+                  setEditingTransaction(null);
+                  setAmount("");
+                  setDescription("");
+                  setTransactionParty("");
+                  setSelectedTags([]);
+                  setTransactionType("income");
+                }}>
                   Cancel Editing
                 </button>
               )}
             </div>
-
-            <div className="transactions-container card-style">
-              <div className="transactions-header">
-                <h2>Transactions</h2>
-                <div className="filters">
+  
+            {activeSection === "transactions" && (
+              <div className="transactions-container card-style">
+                <div className="transactions-header">
+                  <h2>Transactions</h2>
+                  <div className="filters">
                     <div className="filter-group">
-                        <span>Type:</span>
-                        <button className={`filter-btn ${filterType === "all" ? "active" : ""}`} onClick={() => handleFilterChange("all")}>All</button>
-                        <button className={`filter-btn ${filterType === "income" ? "active income" : ""}`} onClick={() => handleFilterChange("income")}>Income</button>
-                        <button className={`filter-btn ${filterType === "expense" ? "active expense" : ""}`} onClick={() => handleFilterChange("expense")}>Expense</button>
+                      <span>Type:</span>
+                      <button className={`filter-btn ${filterType === "all" ? "active" : ""}`} onClick={() => handleFilterChange("all")}>All</button>
+                      <button className={`filter-btn ${filterType === "income" ? "active income" : ""}`} onClick={() => handleFilterChange("income")}>Income</button>
+                      <button className={`filter-btn ${filterType === "expense" ? "active expense" : ""}`} onClick={() => handleFilterChange("expense")}>Expense</button>
                     </div>
-                    <div className="filter-group"> {/* Ensure date inputs have name attributes */}
-                        <span>Date:</span>
-                        <input type="date" name="start" value={dateRange.start} onChange={handleDateRangeChange} />
-                        <input type="date" name="end" value={dateRange.end} onChange={handleDateRangeChange} />
+                    <div className="filter-group">
+                      <span>Date:</span>
+                      <input type="date" name="start" value={dateRange.start} onChange={handleDateRangeChange} />
+                      <input type="date" name="end" value={dateRange.end} onChange={handleDateRangeChange} />
                     </div>
                     <button className="reset-filters" onClick={resetFilters}>Reset Filters</button>
+                  </div>
+                </div>
+  
+                <div className="transactions-list">
+                  {filteredTransactions.length === 0 ? (
+                    <div className="no-transactions">No transactions found.</div>
+                  ) : (
+                    filteredTransactions.map(transaction => (
+                      <div key={transaction.id} className={`transaction ${transaction.type}`}>
+                        <div className="transaction-icon">
+                          <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+                            <circle cx="12" cy="12" r="12" fill={transaction.type === "income" ? "var(--income)" : "var(--expense)"} />
+                            {transaction.type === "income" ? (
+                              <path d="M7 13L12 8L17 13" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            ) : (
+                              <path d="M7 11L12 16L17 11" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            )}
+                          </svg>
+                        </div>
+                        <div className="transaction-details">
+                          <div className="transaction-description">{transaction.description}</div>
+                          {transaction.party && <div className="transaction-party"><em>{transaction.type === "income" ? "From: " : "To: "}</em>{transaction.party}</div>}
+                          <div className="transaction-tags">
+                            {transaction.tags && transaction.tags.map((tag, index) => (
+                              <span key={index} className={`tag ${filterTag === tag ? "filter-active" : ""}`} onClick={() => handleFilterTagChange(tag)}>{tag}</span>
+                            ))}
+                          </div>
+                          <div className="transaction-date">{formatDate(transaction.date || transaction.createdAt)}</div>
+                        </div>
+                        <div className="transaction-amount">
+                          <span>{transaction.type === "income" ? "+" : "-"}{CURRENCY.symbol}{formatAmount(transaction.amount)}</span>
+                        </div>
+                        <div className="transaction-actions">
+                          <button className="edit-btn" onClick={() => editTransaction(transaction)}>✏️</button>
+                          <button className="delete-btn" onClick={() => deleteTransaction(transaction.id)}>🗑️</button>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
-              <div className="transactions-list">
-                {filteredTransactions.length === 0 ? (
-                  <div className="no-transactions">No transactions found.</div>
-                ) : (
-                  filteredTransactions.map((transaction) => (
-                    <div key={transaction.id} className={`transaction ${transaction.type}`}>
-                      <div className="transaction-icon">
-                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <circle cx="12" cy="12" r="12" fill={transaction.type === "income" ? "var(--income)" : "var(--expense)"} />
-                          {transaction.type === "income" ? (
-                            <path d="M7 13L12 8L17 13" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                          ) : (
-                            <path d="M7 11L12 16L17 11" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                          )}
-                        </svg>
-                      </div>
-                      <div className="transaction-details">
-                        <div className="transaction-description">{transaction.description}</div>
-                        {transaction.party && <div className="transaction-party"><em>{transaction.type === "income" ? "From: " : "To: "}</em>{transaction.party}</div>}
-                        <div className="transaction-tags">
-                          {transaction.tags && transaction.tags.map((tag, index) => (
-                            <span key={index} className={`tag ${filterTag === tag ? "filter-active" : ""}`} onClick={() => handleFilterTagChange(tag)}>{tag}</span>
-                          ))}
-                        </div>
-                        <div className="transaction-date">{formatDate(transaction.date || transaction.createdAt)}</div>
-                      </div>
-                      <div className="transaction-amount">
-                        <span>{transaction.type === "income" ? "+" : "-"}{CURRENCY.symbol}{formatAmount(transaction.amount)}</span>
-                      </div>
-                      <div className="transaction-actions">
-                        <button className="edit-btn" onClick={() => editTransaction(transaction)} title="Edit">✏️</button>
-                        <button className="delete-btn" onClick={() => deleteTransaction(transaction.id)} title="Delete">🗑️</button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+            )}
           </>
         )}
-
+  
+        {/* Monthly Overview View */}
         {activeView === "overview" && (
           <MonthlyOverviewDiagram transactions={transactions} currentMonthDate={currentMonth} />
         )}
-
+  
+        {/* Bucket List View */}
         {activeView === "bucketlist" && (
           <div className="bucket-list-section card-style">
             <h2>My Bucket List</h2>
@@ -781,23 +745,25 @@ const App = () => {
               <button onClick={handleAddBucketItem} className="add-btn">Add Item</button>
             </div>
             <div className="bucket-items-display">
-              {bucketListItems.length === 0 ? <p>Your bucket list is empty. Add something you aspire to!</p> :
+              {bucketListItems.length === 0 ? (
+                <p>Your bucket list is empty. Add something you aspire to!</p>
+              ) : (
                 bucketListItems.map(item => (
-                  <BucketListItem 
-                    key={item.id} 
-                    item={item} 
+                  <BucketListItem
+                    key={item.id}
+                    item={item}
                     onUpdate={handleUpdateBucketItem}
                     onDelete={handleDeleteBucketItem}
                     onToggleComplete={handleToggleBucketItemComplete}
                   />
                 ))
-              }
+              )}
             </div>
           </div>
         )}
       </div>
     </div>
   );
-};
+}
 
 export default App;
