@@ -1,61 +1,86 @@
 /* App.css */
 
 /* --- Base & Variables --- */
+
+  /* App.css */
+
+/* --- Base & Variables --- */
 :root {
     --primary-font: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     --monospace-font: 'Fira Code', 'Roboto Mono', monospace;
-  
-    /* Light Theme (Default) */
-    --bg-color: #f4f7f9; /* Lighter, softer background */
-    --card-bg-color: #ffffff;
-    --text-color: #333;
-    --text-light-color: #666;
-    --border-color: #e0e0e0;
-    --primary-accent: #007aff; /* A vibrant blue for primary actions */
-    --primary-accent-hover: #0056b3;
-    --secondary-accent: #6c757d;
-    --success-color: #28a745;
-    --danger-color: #dc3545;
-    --warning-color: #ffc107;
-    --info-color: #17a2b8;
-  
-    --income-color: #4CAF50; /* Green for income */
-    --income-bg-light: rgba(76, 175, 80, 0.1);
-    --expense-color: #F44336; /* Red for expense */
-    --expense-bg-light: rgba(244, 67, 54, 0.1);
-  
-    --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
-    --shadow-md: 0 3px 6px rgba(0,0,0,0.1);
-    --shadow-lg: 0 10px 20px rgba(0,0,0,0.12);
-  
+    
+    /* Modern Elegant Light Theme */
+    --bg-color: #f8f9fa; /* Soft off-white background */
+    --card-bg-color: #ffffff; /* Clean white for cards */
+    --text-color: #212529; /* Deep charcoal for text */
+    --text-light-color: #495057; /* Medium gray for secondary text */
+    --border-color: #dee2e6; /* Subtle light gray border */
+    
+    --primary-accent: #6366f1; /* Elegant indigo */
+    --primary-accent-hover: #4f46e5; /* Deeper indigo for hover */
+    
+    --secondary-accent: #a5b4fc; /* Light indigo */
+    
+    /* Status colors with elegant hues */
+    --success-color: #10b981; /* Emerald green */
+    --danger-color: #ef4444; /* Coral red */
+    --warning-color: #f59e0b; /* Amber yellow */
+    --info-color: #3b82f6; /* Royal blue */
+    
+    --income-color: var(--success-color);
+    --income-bg-light: rgba(16, 185, 129, 0.1);
+    --expense-color: var(--danger-color);
+    --expense-bg-light: rgba(239, 68, 68, 0.1);
+    
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 3px 6px rgba(0, 0, 0, 0.08);
+    --shadow-lg: 0 10px 20px rgba(0, 0, 0, 0.1);
+    
     --border-radius-sm: 4px;
     --border-radius-md: 8px;
     --border-radius-lg: 12px;
-  
+    
     --spacing-xs: 0.25rem;
     --spacing-sm: 0.5rem;
     --spacing-md: 1rem;
     --spacing-lg: 1.5rem;
     --spacing-xl: 2rem;
-  
+    
     --font-size-sm: 0.875rem;
     --font-size-md: 1rem;
     --font-size-lg: 1.25rem;
     --font-size-xl: 1.5rem;
-  }
-  
-  body.dark {
-    --bg-color: #1a1a1a; /* Darker background for dark mode */
-    --card-bg-color: #2c2c2c; /* Slightly lighter card for contrast */
-    --text-color: #f0f0f0;
-    --text-light-color: #aaa;
-    --border-color: #444;
-  
-    --income-color: #66bb6a;
-    --expense-color: #ef5350;
-    --income-bg-light: rgba(102, 187, 106, 0.15);
-    --expense-bg-light: rgba(239, 83, 80, 0.15);
-  }
+}
+
+body.dark {
+    /* Modern Elegant Dark Theme */
+    --bg-color: #0f172a; /* Deep navy background */
+    --card-bg-color: #1e293b; /* Slightly lighter navy for cards */
+    --text-color: #f1f5f9; /* Soft white text */
+    --text-light-color: #cbd5e1; /* Light slate for secondary text */
+    --border-color: #334155; /* Medium slate for borders */
+    
+    /* Adjusting accent colors for dark mode */
+    --primary-accent: #818cf8; /* Brighter indigo */
+    --primary-accent-hover: #6366f1; /* Original indigo for hover */
+    
+    --secondary-accent: #c4b5fd; /* Light violet */
+    
+    /* Status colors adjusted for dark background */
+    --success-color: #34d399; /* Brighter emerald */
+    --danger-color: #f87171; /* Lighter coral red */
+    --warning-color: #fbbf24; /* Brighter amber */
+    --info-color: #60a5fa; /* Lighter royal blue */
+    
+    --income-color: var(--success-color);
+    --income-bg-light: rgba(52, 211, 153, 0.15);
+    --expense-color: var(--danger-color);
+    --expense-bg-light: rgba(248, 113, 113, 0.15);
+    
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 3px 6px rgba(0, 0, 0, 0.35);
+    --shadow-lg: 0 10px 20px rgba(0, 0, 0, 0.4);
+}  /* The rest of your App.css file remains the same below this point... */
   
   body {
     font-family: var(--primary-font);
