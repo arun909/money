@@ -329,6 +329,7 @@ const App = () => {
   const [newBucketItemText, setNewBucketItemText] = useState("");
   const [newBucketItemNotes, setNewBucketItemNotes] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const [sortOrder, setSortOrder] = useState("newest");
 
   useEffect(() => {
     setLoading(true);
@@ -493,6 +494,7 @@ const App = () => {
     setFilterType("all");
     setFilterTag("");
     setDateRange({ start: "", end: "" });
+    setSortOrder("newest");
   };
 
   const toggleCalendarVisibility = () => setCalendarVisible(prev => !prev);
@@ -639,6 +641,26 @@ const App = () => {
     return !isNaN(num) ? num.toFixed(2) : "0.00";
   };
 
+  const sortTransactions = (transactionsToSort) => {
+    return [...transactionsToSort].sort((a, b) => {
+      const dateA = new Date(a.date || (a.createdAt?.toDate ? a.createdAt.toDate() : a.createdAt));
+      const dateB = new Date(b.date || (b.createdAt?.toDate ? b.createdAt.toDate() : b.createdAt));
+      
+      switch (sortOrder) {
+        case "newest":
+          return dateB - dateA;
+        case "oldest":
+          return dateA - dateB;
+        case "highest":
+          return Number(b.amount) - Number(a.amount);
+        case "lowest":
+          return Number(a.amount) - Number(b.amount);
+        default:
+          return dateB - dateA;
+      }
+    });
+  };
+
   const filteredTransactions = transactions.filter(transaction => {
     if (filterType !== "all" && transaction.type !== filterType) return false;
     if (filterTag && (!transaction.tags || !transaction.tags.includes(filterTag))) return false;
@@ -660,6 +682,8 @@ const App = () => {
     }
     return true;
   });
+
+  const sortedTransactions = sortTransactions(filteredTransactions);
 
   if (loading) {
     return (
@@ -706,7 +730,7 @@ const App = () => {
                 <button onClick={() => { setActiveView("bucketlist"); setShowMenu(false); }}>
                   <Target size={16} /> Bucket List
                 </button>
-                <button onClick={() => { setActiveSection("transactions"); setShowMenu(false); }}>
+                <button onClick={() => { setActiveView("transactions"); setShowMenu(false); }}>
                   <CreditCard size={16} /> Transactions
                 </button>
               </div>
@@ -870,148 +894,6 @@ const App = () => {
                   </button>
                 </div>
               </div>
-
-              {/* Transactions Section */}
-              {activeSection === "transactions" && (
-                <div className="transactions-section">
-                  <div className="transactions-container card-style">
-                    <div className="transactions-header">
-                      <div className="header-content">
-                        <h3>Recent Transactions</h3>
-                        <button 
-                          className="filter-toggle-btn"
-                          onClick={() => setShowFilters(!showFilters)}
-                        >
-                          <Filter size={16} />
-                          Filters
-                        </button>
-                      </div>
-
-                      {showFilters && (
-                        <div className="filters-panel">
-                          <div className="filters-grid">
-                            <div className="filter-group">
-                              <label>Type</label>
-                              <div className="filter-buttons">
-                                <button 
-                                  className={`filter-btn ${filterType === "all" ? "active" : ""}`} 
-                                  onClick={() => handleFilterChange("all")}
-                                >
-                                  All
-                                </button>
-                                <button 
-                                  className={`filter-btn ${filterType === "income" ? "active income" : ""}`} 
-                                  onClick={() => handleFilterChange("income")}
-                                >
-                                  Income
-                                </button>
-                                <button 
-                                  className={`filter-btn ${filterType === "expense" ? "active expense" : ""}`} 
-                                  onClick={() => handleFilterChange("expense")}
-                                >
-                                  Expense
-                                </button>
-                              </div>
-                            </div>
-
-                            <div className="filter-group">
-                              <label>Date Range</label>
-                              <div className="date-inputs">
-                                <input 
-                                  type="date" 
-                                  name="start" 
-                                  value={dateRange.start} 
-                                  onChange={handleDateRangeChange}
-                                  placeholder="Start date"
-                                />
-                                <input 
-                                  type="date" 
-                                  name="end" 
-                                  value={dateRange.end} 
-                                  onChange={handleDateRangeChange}
-                                  placeholder="End date"
-                                />
-                              </div>
-                            </div>
-
-                            <div className="filter-actions">
-                              <button className="reset-filters-btn" onClick={resetFilters}>
-                                <X size={14} />
-                                Reset
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="transactions-list">
-                      {filteredTransactions.length === 0 ? (
-                        <div className="no-transactions">
-                          <div className="empty-state">
-                            <span className="empty-icon">📝</span>
-                            <h4>No transactions found</h4>
-                            <p>Try adjusting your filters or add a new transaction</p>
-                          </div>
-                        </div>
-                      ) : (
-                        filteredTransactions.map(transaction => (
-                          <div key={transaction.id} className={`transaction ${transaction.type}`}>
-                            <div className="transaction-icon">
-                              <div className={`icon-circle ${transaction.type}`}>
-                                {transaction.type === "income" ? "↗" : "↙"}
-                              </div>
-                            </div>
-                            
-                            <div className="transaction-details">
-                              <div className="transaction-main">
-                                <h4 className="transaction-description">{transaction.description}</h4>
-                                <div className="transaction-amount">
-                                  <span className={transaction.type}>
-                                    {transaction.type === "income" ? "+" : "-"}{CURRENCY.symbol}{formatAmount(transaction.amount)}
-                                  </span>
-                                </div>
-                              </div>
-                              
-                              <div className="transaction-meta">
-                                {transaction.party && (
-                                  <span className="transaction-party">
-                                    {transaction.type === "income" ? "From: " : "To: "}{transaction.party}
-                                  </span>
-                                )}
-                                <span className="transaction-date">{formatDate(transaction.date || transaction.createdAt)}</span>
-                              </div>
-
-                              {transaction.tags && transaction.tags.length > 0 && (
-                                <div className="transaction-tags">
-                                  {transaction.tags.map((tag, index) => (
-                                    <span 
-                                      key={index} 
-                                      className={`tag ${filterTag === tag ? "filter-active" : ""}`} 
-                                      onClick={() => handleFilterTagChange(tag)}
-                                    >
-                                      {tag}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="transaction-actions">
-                              <button className="edit-btn" onClick={() => editTransaction(transaction)}>
-                                ✏️
-                              </button>
-                              <button className="delete-btn" onClick={() => deleteTransaction(transaction.id)}>
-                                🗑️
-                              </button>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -1036,6 +918,162 @@ const App = () => {
                 <button onClick={() => changeMonth(1)} className="nav-btn">Next Month →</button>
               </div>
               <MonthlyOverviewDiagram transactions={transactions} currentMonthDate={currentMonth} />
+            </div>
+          )}
+
+          {/* Transactions View */}
+          {activeView === "transactions" && (
+            <div className="transactions-section">
+              <div className="transactions-container card-style">
+                <div className="transactions-header">
+                  <div className="header-content">
+                    <h3>All Transactions</h3>
+                    <button 
+                      className="filter-toggle-btn"
+                      onClick={() => setShowFilters(!showFilters)}
+                    >
+                      <Filter size={16} />
+                      Filters & Sort
+                    </button>
+                  </div>
+
+                  {showFilters && (
+                    <div className="filters-panel">
+                      <div className="filters-grid">
+                        <div className="filter-group">
+                          <label>Type</label>
+                          <div className="filter-buttons">
+                            <button 
+                              className={`filter-btn ${filterType === "all" ? "active" : ""}`} 
+                              onClick={() => handleFilterChange("all")}
+                            >
+                              All
+                            </button>
+                            <button 
+                              className={`filter-btn ${filterType === "income" ? "active income" : ""}`} 
+                              onClick={() => handleFilterChange("income")}
+                            >
+                              Income
+                            </button>
+                            <button 
+                              className={`filter-btn ${filterType === "expense" ? "active expense" : ""}`} 
+                              onClick={() => handleFilterChange("expense")}
+                            >
+                              Expense
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="filter-group">
+                          <label>Date Range</label>
+                          <div className="date-inputs">
+                            <input 
+                              type="date" 
+                              name="start" 
+                              value={dateRange.start} 
+                              onChange={handleDateRangeChange}
+                              placeholder="Start date"
+                            />
+                            <input 
+                              type="date" 
+                              name="end" 
+                              value={dateRange.end} 
+                              onChange={handleDateRangeChange}
+                              placeholder="End date"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="filter-group">
+                          <label>Sort By</label>
+                          <select 
+                            value={sortOrder} 
+                            onChange={(e) => setSortOrder(e.target.value)}
+                            className="sort-select"
+                          >
+                            <option value="newest">Newest First</option>
+                            <option value="oldest">Oldest First</option>
+                            <option value="highest">Highest Amount</option>
+                            <option value="lowest">Lowest Amount</option>
+                          </select>
+                        </div>
+
+                        <div className="filter-actions">
+                          <button className="reset-filters-btn" onClick={resetFilters}>
+                            <X size={14} />
+                            Reset
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="transactions-list">
+                  {sortedTransactions.length === 0 ? (
+                    <div className="no-transactions">
+                      <div className="empty-state">
+                        <span className="empty-icon">📝</span>
+                        <h4>No transactions found</h4>
+                        <p>Try adjusting your filters or add a new transaction</p>
+                      </div>
+                    </div>
+                  ) : (
+                    sortedTransactions.map(transaction => (
+                      <div key={transaction.id} className={`transaction ${transaction.type}`}>
+                        <div className="transaction-icon">
+                          <div className={`icon-circle ${transaction.type}`}>
+                            {transaction.type === "income" ? "↗" : "↙"}
+                          </div>
+                        </div>
+                        
+                        <div className="transaction-details">
+                          <div className="transaction-main">
+                            <h4 className="transaction-description">{transaction.description}</h4>
+                            <div className="transaction-amount">
+                              <span className={transaction.type}>
+                                {transaction.type === "income" ? "+" : "-"}{CURRENCY.symbol}{formatAmount(transaction.amount)}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          <div className="transaction-meta">
+                            {transaction.party && (
+                              <span className="transaction-party">
+                                {transaction.type === "income" ? "From: " : "To: "}{transaction.party}
+                              </span>
+                            )}
+                            <span className="transaction-date">{formatDate(transaction.date || transaction.createdAt)}</span>
+                          </div>
+
+                          {transaction.tags && transaction.tags.length > 0 && (
+                            <div className="transaction-tags">
+                              {transaction.tags.map((tag, index) => (
+                                <span 
+                                  key={index} 
+                                  className={`tag ${filterTag === tag ? "filter-active" : ""}`} 
+                                  onClick={() => handleFilterTagChange(tag)}
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="transaction-actions">
+                          <button className="edit-btn" onClick={() => editTransaction(transaction)}>
+                            ✏️
+                          </button>
+                          <button className="delete-btn" onClick={() => deleteTransaction(transaction.id)}>
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
           )}
 

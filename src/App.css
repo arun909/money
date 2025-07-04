@@ -718,7 +718,8 @@ h4 { font-size: var(--font-size-lg); }
 }
 
 .form-group input,
-.form-group textarea {
+.form-group textarea,
+.sort-select {
   padding: var(--spacing-md);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius-md);
@@ -730,7 +731,8 @@ h4 { font-size: var(--font-size-lg); }
 }
 
 .form-group input:focus,
-.form-group textarea:focus {
+.form-group textarea:focus,
+.sort-select:focus {
   outline: none;
   border-color: var(--primary-accent);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
@@ -893,7 +895,7 @@ h4 { font-size: var(--font-size-lg); }
 
 .filters-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: 1fr 1fr 1fr auto;
   gap: var(--spacing-lg);
   align-items: end;
 }
@@ -1325,7 +1327,7 @@ h4 { font-size: var(--font-size-lg); }
   }
   
   .filters-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: var(--spacing-md);
   }
 }
@@ -1360,6 +1362,7 @@ h4 { font-size: var(--font-size-lg); }
     flex-direction: column;
     align-items: flex-start;
     gap: var(--spacing-md);
+    padding: var(--spacing-md);
   }
   
   .transaction-main {
@@ -1370,6 +1373,11 @@ h4 { font-size: var(--font-size-lg); }
     opacity: 1;
     width: 100%;
     justify-content: flex-end;
+  }
+  
+  .filters-grid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-md);
   }
 }
 
@@ -1424,6 +1432,30 @@ h4 { font-size: var(--font-size-lg); }
   .stats-grid {
     grid-template-columns: 1fr 1fr;
   }
+  
+  /* Mobile optimized transaction cards */
+  .transaction {
+    padding: var(--spacing-md);
+  }
+  
+  .icon-circle {
+    width: 36px;
+    height: 36px;
+    font-size: 1.2em;
+  }
+  
+  .transaction-description {
+    font-size: var(--font-size-sm);
+  }
+  
+  .transaction-amount {
+    font-size: var(--font-size-md);
+  }
+  
+  .transaction-party,
+  .transaction-date {
+    font-size: var(--font-size-xs);
+  }
 }
 
 @media (max-width: 480px) {
@@ -1440,6 +1472,7 @@ h4 { font-size: var(--font-size-lg); }
     flex-direction: column;
     text-align: center;
     gap: var(--spacing-xs);
+    padding: var(--spacing-sm);
   }
   
   .summary-icon {
@@ -1447,7 +1480,7 @@ h4 { font-size: var(--font-size-lg); }
   }
   
   .transaction-amount {
-    font-size: var(--font-size-md);
+    font-size: var(--font-size-sm);
   }
   
   .actions {
@@ -1456,5 +1489,32 @@ h4 { font-size: var(--font-size-lg); }
   
   .stats-grid {
     grid-template-columns: 1fr;
+  }
+  
+  /* Extra small mobile transaction cards */
+  .transaction {
+    padding: var(--spacing-sm);
+    gap: var(--spacing-sm);
+  }
+  
+  .icon-circle {
+    width: 32px;
+    height: 32px;
+    font-size: 1em;
+  }
+  
+  .transaction-description {
+    font-size: var(--font-size-xs);
+  }
+  
+  .transaction-amount {
+    font-size: var(--font-size-sm);
+  }
+  
+  .edit-btn,
+  .delete-btn {
+    width: 32px;
+    height: 32px;
+    font-size: var(--font-size-xs);
   }
 }
