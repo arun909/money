@@ -9,42 +9,143 @@ import {
   query,
   onSnapshot,
   updateDoc,
-  orderBy, // Added for sorting
-  Timestamp // Added for createdAt
+  orderBy,
+  Timestamp
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { Chart, registerables } from 'chart.js/auto'; // Import Chart.js
+import { Chart, registerables } from 'chart.js/auto';
 import "./App.css";
-import { Settings } from "lucide-react";
+import { Settings, Calendar, TrendingUp, Target, CreditCard, Plus, Filter, X } from "lucide-react";
 
-Chart.register(...registerables); // Register all Chart.js components
+Chart.register(...registerables);
+
 const CURRENCY = {
   symbol: "₹",
   code: "INR"
 };
 
+// Weekly Overview Component
+const WeeklyOverviewDiagram = ({ transactions, selectedWeek }) => {
+  const chartRef = useRef(null);
+  const chartInstance = useRef(null);
 
-//Monthly Overview Diagram Component
+  useEffect(() => {
+    if (!chartRef.current) return;
+
+    // Calculate start and end of the selected week
+    const startOfWeek = new Date(selectedWeek);
+    startOfWeek.setDate(selectedWeek.getDate() - selectedWeek.getDay());
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+    // Filter transactions for the week
+    const weeklyTransactions = transactions.filter(t => {
+      const tDate = new Date(t.date || (t.createdAt?.toDate ? t.createdAt.toDate() : t.createdAt));
+      return tDate >= startOfWeek && tDate <= endOfWeek;
+    });
+
+    // Group by day of week
+    const dailyData = Array(7).fill(0).map((_, index) => {
+      const day = new Date(startOfWeek);
+      day.setDate(startOfWeek.getDate() + index);
+      
+      const dayTransactions = weeklyTransactions.filter(t => {
+        const tDate = new Date(t.date || (t.createdAt?.toDate ? t.createdAt.toDate() : t.createdAt));
+        return tDate.toDateString() === day.toDateString();
+      });
+
+      const income = dayTransactions
+        .filter(t => t.type === "income")
+        .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+      
+      const expense = dayTransactions
+        .filter(t => t.type === "expense")
+        .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
+      return { day: day.toLocaleDateString('en', { weekday: 'short' }), income, expense };
+    });
+
+    if (chartInstance.current) {
+      chartInstance.current.destroy();
+    }
+
+    const ctx = chartRef.current.getContext("2d");
+    chartInstance.current = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: dailyData.map(d => d.day),
+        datasets: [
+          {
+            label: "Income",
+            data: dailyData.map(d => d.income),
+            borderColor: "rgb(16, 185, 129)",
+            backgroundColor: "rgba(16, 185, 129, 0.1)",
+            tension: 0.4,
+            fill: true
+          },
+          {
+            label: "Expense",
+            data: dailyData.map(d => d.expense),
+            borderColor: "rgb(239, 68, 68)",
+            backgroundColor: "rgba(239, 68, 68, 0.1)",
+            tension: 0.4,
+            fill: true
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'top',
+          },
+          title: {
+            display: true,
+            text: `Week of ${startOfWeek.toLocaleDateString()}`
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: function(value) {
+                return CURRENCY.symbol + value;
+              }
+            }
+          }
+        }
+      }
+    });
+
+    return () => {
+      if (chartInstance.current) {
+        chartInstance.current.destroy();
+        chartInstance.current = null;
+      }
+    };
+  }, [transactions, selectedWeek]);
+
+  return (
+    <div className="weekly-overview-container card-style">
+      <div className="overview-header">
+        <TrendingUp className="overview-icon" />
+        <h2>Weekly Financial Overview</h2>
+      </div>
+      <div className="chart-container">
+        <canvas ref={chartRef}></canvas>
+      </div>
+    </div>
+  );
+};
+
+// Monthly Overview Component (Enhanced)
 const MonthlyOverviewDiagram = ({ transactions, currentMonthDate }) => {
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
 
   useEffect(() => {
-    if (!transactions.length && chartRef.current) { // Handle case with no transactions
-        if (chartInstance.current) {
-            chartInstance.current.destroy();
-            chartInstance.current = null;
-        }
-        const ctx = chartRef.current.getContext("2d");
-        // Optionally, display a message or an empty state chart
-        ctx.clearRect(0, 0, chartRef.current.width, chartRef.current.height);
-        ctx.font = "16px Arial";
-        ctx.textAlign = "center";
-        ctx.fillText("No transaction data for this month.", chartRef.current.width / 2, chartRef.current.height / 2);
-        return;
-    }
     if (!chartRef.current) return;
-
 
     const month = currentMonthDate.getMonth();
     const year = currentMonthDate.getFullYear();
@@ -69,41 +170,42 @@ const MonthlyOverviewDiagram = ({ transactions, currentMonthDate }) => {
 
     const ctx = chartRef.current.getContext("2d");
     chartInstance.current = new Chart(ctx, {
-      type: "bar",
+      type: "doughnut",
       data: {
-        labels: ["Income", "Expense"],
+        labels: ["Income", "Expense", "Savings"],
         datasets: [
           {
-            label: `Overview for ${currentMonthDate.toLocaleString('default', { month: 'long' })} ${year}`,
-            data: [monthlyIncome, monthlyExpense],
+            data: [monthlyIncome, monthlyExpense, Math.max(0, monthlyIncome - monthlyExpense)],
             backgroundColor: [
-              "rgba(118, 200, 192, 0.6)", // --income with alpha
-              "rgba(255, 107, 107, 0.6)", // --expense with alpha
+              "rgba(16, 185, 129, 0.8)",
+              "rgba(239, 68, 68, 0.8)",
+              "rgba(59, 130, 246, 0.8)"
             ],
             borderColor: [
-              "rgb(118, 200, 192)",
-              "rgb(255, 107, 107)",
+              "rgb(16, 185, 129)",
+              "rgb(239, 68, 68)",
+              "rgb(59, 130, 246)"
             ],
-            borderWidth: 1,
+            borderWidth: 2,
           },
         ],
       },
       options: {
-        scales: {
-          y: {
-            beginAtZero: true,
-            ticks: {
-              callback: function(value) {
-                return CURRENCY.symbol + value;
-              }
-            }
-          },
-        },
         responsive: true,
         maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+          },
+          title: {
+            display: true,
+            text: `${currentMonthDate.toLocaleString('default', { month: 'long' })} ${year} Overview`
+          }
+        }
       },
     });
-     return () => {
+
+    return () => {
       if (chartInstance.current) {
         chartInstance.current.destroy();
         chartInstance.current = null;
@@ -113,16 +215,18 @@ const MonthlyOverviewDiagram = ({ transactions, currentMonthDate }) => {
 
   return (
     <div className="monthly-overview-container card-style">
-      <h2>Monthly Financial Overview</h2>
-      <p>Showing data for: {currentMonthDate.toLocaleString('default', { month: 'long' })} {currentMonthDate.getFullYear()}</p>
-      <div style={{ height: "300px", position: "relative" }}>
+      <div className="overview-header">
+        <Calendar className="overview-icon" />
+        <h2>Monthly Financial Overview</h2>
+      </div>
+      <div className="chart-container">
         <canvas ref={chartRef}></canvas>
       </div>
     </div>
   );
 };
 
-//Bucket List Item Component
+// Bucket List Item Component (Enhanced)
 const BucketListItem = ({ item, onUpdate, onDelete, onToggleComplete }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(item.text);
@@ -142,34 +246,52 @@ const BucketListItem = ({ item, onUpdate, onDelete, onToggleComplete }) => {
             value={editText}
             onChange={(e) => setEditText(e.target.value)}
             placeholder="Item name"
+            className="edit-input"
           />
           <textarea
             value={editNotes}
             onChange={(e) => setEditNotes(e.target.value)}
             placeholder="Notes (optional)"
+            className="edit-textarea"
           />
           <div className="actions">
-            <button onClick={handleSave} className="save-btn">Save</button>
-            <button onClick={() => setIsEditing(false)} className="cancel-btn">Cancel</button>
+            <button onClick={handleSave} className="save-btn">
+              <Plus className="btn-icon" /> Save
+            </button>
+            <button onClick={() => setIsEditing(false)} className="cancel-btn">
+              <X className="btn-icon" /> Cancel
+            </button>
           </div>
         </div>
       ) : (
         <div className="bucket-item-view">
           <div className="item-content" onClick={() => onToggleComplete(item.id, !item.isCompleted)}>
-            <input type="checkbox" checked={item.isCompleted} onChange={() => {}} className="item-checkbox"/> {/* Added onChange to checkbox for accessibility though click is on parent */}
+            <input 
+              type="checkbox" 
+              checked={item.isCompleted} 
+              onChange={() => {}} 
+              className="item-checkbox"
+            />
             <span className="item-text">{item.text}</span>
           </div>
-          {item.notes && <p className="item-notes"><em>Notes:</em> {item.notes}</p>}
+          {item.notes && (
+            <div className="item-notes">
+              <span className="notes-label">Notes:</span> {item.notes}
+            </div>
+          )}
           <div className="actions">
-            <button onClick={() => setIsEditing(true)} className="edit-btn">✏️</button>
-            <button onClick={() => onDelete(item.id)} className="delete-btn">🗑️</button>
+            <button onClick={() => setIsEditing(true)} className="edit-btn">
+              ✏️
+            </button>
+            <button onClick={() => onDelete(item.id)} className="delete-btn">
+              🗑️
+            </button>
           </div>
         </div>
       )}
     </div>
   );
 };
-
 
 // Main App Component
 const App = () => {
@@ -184,7 +306,7 @@ const App = () => {
   const [transactionType, setTransactionType] = useState("income");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
-  const [transactionParty, setTransactionParty] = useState(""); // For "Received From" / "Paid To"
+  const [transactionParty, setTransactionParty] = useState("");
   const [selectedTags, setSelectedTags] = useState([]);
   const [balance, setBalance] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -197,68 +319,62 @@ const App = () => {
     totalExpense: 0,
     topExpenseCategories: []
   });
-  const [activeSection, setActiveSection] = useState("overview"); // Default to overview
-
+  const [activeSection, setActiveSection] = useState("overview");
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [currentMonth, setCurrentMonth] = useState(new Date()); 
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [selectedWeek, setSelectedWeek] = useState(new Date());
   const [calendarVisible, setCalendarVisible] = useState(true);
-  const [activeView, setActiveView] = useState("dashboard"); // 'dashboard', 'overview', 'bucketlist'
-
-  // Bucket List State
+  const [activeView, setActiveView] = useState("dashboard");
   const [bucketListItems, setBucketListItems] = useState([]);
   const [newBucketItemText, setNewBucketItemText] = useState("");
   const [newBucketItemNotes, setNewBucketItemNotes] = useState("");
-
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     setLoading(true);
-    // Transactions
+    
     const transactionsQuery = query(collection(db, "transactions"), orderBy("createdAt", "desc"));
     const transactionsUnsub = onSnapshot(transactionsQuery, (snapshot) => {
-        const transactionsData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        setTransactions(transactionsData);
-        calculateBalance(transactionsData);
-        calculateStatistics(transactionsData);
-      }, (error) => {
-        console.error("Error fetching transactions:", error);
-        setLoading(false);
-      }
-    );
+      const transactionsData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setTransactions(transactionsData);
+      calculateBalance(transactionsData);
+      calculateStatistics(transactionsData);
+    }, (error) => {
+      console.error("Error fetching transactions:", error);
+      setLoading(false);
+    });
 
-    // Tags
     const tagsUnsub = onSnapshot(collection(db, "tags"), (snapshot) => {
-        const tagsData = snapshot.docs.map(doc => doc.data().name);
-        setTags(tagsData);
-      }, (error) => {
-        console.error("Error fetching tags:", error);
-      }
-    );
-    // Bucket List Items
+      const tagsData = snapshot.docs.map(doc => doc.data().name);
+      setTags(tagsData);
+    }, (error) => {
+      console.error("Error fetching tags:", error);
+    });
+
     const bucketListQuery = query(collection(db, "bucketListItems"), orderBy("createdAt", "desc"));
     const bucketListUnsub = onSnapshot(bucketListQuery, (snapshot) => {
-        const itemsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setBucketListItems(itemsData);
-      }, (error) => {
-        console.error("Error fetching bucket list items:", error);
-      }
-    );
-    Promise.all([
-        getDocs(transactionsQuery), 
-    ]).then(() => {
-        setLoading(false);
-    }).catch(() => {
-        setLoading(false); // also set loading false on error
+      const itemsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setBucketListItems(itemsData);
+    }, (error) => {
+      console.error("Error fetching bucket list items:", error);
     });
+
+    Promise.all([getDocs(transactionsQuery)]).then(() => {
+      setLoading(false);
+    }).catch(() => {
+      setLoading(false);
+    });
+
     return () => {
       transactionsUnsub();
       tagsUnsub();
       bucketListUnsub();
     };
   }, []);
-  
+
   useEffect(() => {
     localStorage.setItem("darkMode", JSON.stringify(isDarkMode));
     document.body.classList.remove(isDarkMode ? 'light' : 'dark');
@@ -269,48 +385,32 @@ const App = () => {
     const totalIncome = transactionsData.filter(t => t.type === "income").reduce((sum, t) => sum + Number(t.amount || 0), 0);
     const totalExpense = transactionsData.filter(t => t.type === "expense").reduce((sum, t) => sum + Number(t.amount || 0), 0);
     const expensesByTag = {};
+    
     transactionsData.filter(t => t.type === "expense").forEach(transaction => {
-        if (transaction.tags && transaction.tags.length > 0) {
-          transaction.tags.forEach(tag => {
-            expensesByTag[tag] = (expensesByTag[tag] || 0) + Number(transaction.amount || 0);
-          });
-        } else {
-          expensesByTag["Uncategorized"] = (expensesByTag["Uncategorized"] || 0) + Number(transaction.amount || 0);
-        }
-      });
-    const topExpenseCategories = Object.entries(expensesByTag).map(([tag, amount]) => ({ tag, amount })).sort((a, b) => b.amount - a.amount).slice(0, 5);
+      if (transaction.tags && transaction.tags.length > 0) {
+        transaction.tags.forEach(tag => {
+          expensesByTag[tag] = (expensesByTag[tag] || 0) + Number(transaction.amount || 0);
+        });
+      } else {
+        expensesByTag["Uncategorized"] = (expensesByTag["Uncategorized"] || 0) + Number(transaction.amount || 0);
+      }
+    });
+    
+    const topExpenseCategories = Object.entries(expensesByTag)
+      .map(([tag, amount]) => ({ tag, amount }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5);
+    
     setStatistics({ totalIncome, totalExpense, topExpenseCategories });
   };
 
   const calculateBalance = (transactionsData) => {
-    const total = transactionsData.reduce((acc, transaction) => transaction.type === "income" ? acc + Number(transaction.amount || 0) : acc - Number(transaction.amount || 0), 0);
+    const total = transactionsData.reduce((acc, transaction) => 
+      transaction.type === "income" ? acc + Number(transaction.amount || 0) : acc - Number(transaction.amount || 0), 0);
     setBalance(total);
   };
 
-
   const toggleTheme = () => setIsDarkMode(prev => !prev);
-  const handleTagChange = (e) => setNewTag(e.target.value);
-
-  const addTag = async () => {
-    if (newTag.trim() && !tags.includes(newTag.trim())) {
-      try {
-        await addDoc(collection(db, "tags"), { name: newTag.trim() });
-        setNewTag("");
-      } catch (error) { console.error("Error adding tag:", error); }
-    }
-  };
-
-  const removeTag = async (tagToRemove) => {
-    try {
-      const q = query(collection(db, "tags"), where("name", "==", tagToRemove));
-      const querySnapshot = await getDocs(q);
-      querySnapshot.forEach(async (docSnapshot) => {
-        await deleteDoc(doc(db, "tags", docSnapshot.id));
-      });
-    } catch (error) { console.error("Error removing tag:", error); }
-  };
-
-  const handleTransactionTypeChange = (type) => setTransactionType(type);
 
   const handleSubmitTransaction = async () => {
     if (amount && !isNaN(amount) && description.trim()) {
@@ -320,7 +420,7 @@ const App = () => {
         description: description.trim(),
         tags: selectedTags,
         date: selectedDate.toISOString(),
-        party: transactionParty.trim() || null, 
+        party: transactionParty.trim() || null,
       };
 
       try {
@@ -353,19 +453,24 @@ const App = () => {
     setDescription(transaction.description);
     setSelectedTags(transaction.tags || []);
     setTransactionParty(transaction.party || "");
-    setSelectedDate(new Date(transaction.date || (transaction.createdAt?.toDate ? transaction.createdAt.toDate() : transaction.createdAt) ));
-    setActiveView("dashboard"); 
-    const formContainer = document.querySelector('.transaction-form-container');
-    if (formContainer) {
+    setSelectedDate(new Date(transaction.date || (transaction.createdAt?.toDate ? transaction.createdAt.toDate() : transaction.createdAt)));
+    setActiveView("dashboard");
+    
+    setTimeout(() => {
+      const formContainer = document.querySelector('.transaction-form-container');
+      if (formContainer) {
         formContainer.scrollIntoView({ behavior: 'smooth' });
-    }
+      }
+    }, 100);
   };
 
   const deleteTransaction = async (id) => {
     if (window.confirm("Are you sure you want to delete this transaction?")) {
       try {
         await deleteDoc(doc(db, "transactions", id));
-      } catch (error) { console.error("Error deleting transaction:", error); }
+      } catch (error) {
+        console.error("Error deleting transaction:", error);
+      }
     }
   };
 
@@ -376,12 +481,11 @@ const App = () => {
   const handleFilterChange = (type) => setFilterType(type);
   const handleFilterTagChange = (tag) => setFilterTag(prev => prev === tag ? "" : tag);
 
-  // CORRECTED handleDateRangeChange
   const handleDateRangeChange = (e) => {
-    const { name, value } = e.target; // FIX: Destructure name and value
+    const { name, value } = e.target;
     setDateRange(prev => ({
       ...prev,
-      [name]: value // FIX: Use destructured name
+      [name]: value
     }));
   };
 
@@ -392,12 +496,22 @@ const App = () => {
   };
 
   const toggleCalendarVisibility = () => setCalendarVisible(prev => !prev);
+  
   const handleDateClick = (day) => {
     const newDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
     setSelectedDate(newDate);
   };
+  
   const changeMonth = (offset) => {
     setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + offset, 1));
+  };
+
+  const changeWeek = (offset) => {
+    setSelectedWeek(prev => {
+      const newWeek = new Date(prev);
+      newWeek.setDate(prev.getDate() + (offset * 7));
+      return newWeek;
+    });
   };
 
   const handleAddBucketItem = async () => {
@@ -433,15 +547,16 @@ const App = () => {
       }
     }
   };
+
   const handleToggleBucketItemComplete = async (id, isCompleted) => {
-     try {
+    try {
       await updateDoc(doc(db, "bucketListItems", id), { isCompleted });
     } catch (error) {
       console.error("Error toggling bucket list item completion:", error);
     }
   };
 
-  const renderCalendar = () => { 
+  const renderCalendar = () => {
     const month = currentMonth.getMonth();
     const year = currentMonth.getFullYear();
     const firstDayOfMonth = new Date(year, month, 1).getDay();
@@ -466,10 +581,10 @@ const App = () => {
       
       const dateForDay = new Date(year, month, day);
       const hasTransactions = transactionsThisMonth.some(t => {
-         const tDateObj = t.date ? new Date(t.date) : (t.createdAt?.toDate ? t.createdAt.toDate() : new Date(t.createdAt));
-         return tDateObj.getFullYear() === dateForDay.getFullYear() &&
-                tDateObj.getMonth() === dateForDay.getMonth() &&
-                tDateObj.getDate() === dateForDay.getDate();
+        const tDateObj = t.date ? new Date(t.date) : (t.createdAt?.toDate ? t.createdAt.toDate() : new Date(t.createdAt));
+        return tDateObj.getFullYear() === dateForDay.getFullYear() &&
+               tDateObj.getMonth() === dateForDay.getMonth() &&
+               tDateObj.getDate() === dateForDay.getDate();
       });
       
       days.push(
@@ -483,12 +598,13 @@ const App = () => {
         </div>
       );
     }
-     return (
+
+    return (
       <div className="calendar">
         <div className="calendar-header">
-          <button onClick={() => changeMonth(-1)}>←</button>
+          <button onClick={() => changeMonth(-1)} className="nav-btn">←</button>
           <h3>{monthNames[month]} {year}</h3>
-          <button onClick={() => changeMonth(1)}>→</button>
+          <button onClick={() => changeMonth(1)} className="nav-btn">→</button>
         </div>
         <div className="calendar-days-header">
           <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
@@ -503,46 +619,43 @@ const App = () => {
     if (!dateInput) return "No Date";
 
     if (dateInput instanceof Timestamp) {
-        date = dateInput.toDate();
+      date = dateInput.toDate();
     } else if (typeof dateInput === 'string' || dateInput instanceof Date) {
-        date = new Date(dateInput);
+      date = new Date(dateInput);
     } else {
-        return "Invalid Date Input"; 
+      return "Invalid Date Input";
     }
 
-    if (isNaN(date.getTime())) { 
-        return "Invalid Date";
+    if (isNaN(date.getTime())) {
+      return "Invalid Date";
     }
 
     const options = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
     return date.toLocaleDateString(undefined, options);
   };
+
   const formatAmount = (amountVal) => {
     const num = Number(amountVal);
     return !isNaN(num) ? num.toFixed(2) : "0.00";
   };
-  
-  // Commenting out unused mobile menu toggle
-  // const toggleMobileMenu = () => setIsMobileMenuOpen(prev => !prev);
 
   const filteredTransactions = transactions.filter(transaction => {
     if (filterType !== "all" && transaction.type !== filterType) return false;
     if (filterTag && (!transaction.tags || !transaction.tags.includes(filterTag))) return false;
     
     const transactionDateRaw = transaction.date || transaction.createdAt;
-    if (!transactionDateRaw) return true; // Or false, depending on how you want to handle missing dates
+    if (!transactionDateRaw) return true;
     
     const transactionDate = transactionDateRaw.toDate ? transactionDateRaw.toDate() : new Date(transactionDateRaw);
 
     if (dateRange.start) {
-        const startDate = new Date(dateRange.start);
-        // Reset time part of startDate for day-based comparison
-        startDate.setHours(0,0,0,0);
-        if (transactionDate < startDate) return false;
+      const startDate = new Date(dateRange.start);
+      startDate.setHours(0,0,0,0);
+      if (transactionDate < startDate) return false;
     }
     if (dateRange.end) {
       const endDate = new Date(dateRange.end);
-      endDate.setHours(23, 59, 59, 999); 
+      endDate.setHours(23, 59, 59, 999);
       if (transactionDate > endDate) return false;
     }
     return true;
@@ -552,218 +665,438 @@ const App = () => {
     return (
       <div className="loading">
         <div className="loading-spinner"></div>
-        Loading My-Money...
+        Loading EXPANSIO...
       </div>
     );
   }
 
-  // function app({ activeView, setActiveView, activeSection, setActiveSection }) {
-  //   const [showMenu, setShowMenu] = useState(false);
-
   return (
     <div className="app">
-     <nav className="navbar">
-  <div className="navbar-brand">EXPANSIO</div>
+      <nav className="navbar">
+        <div className="navbar-brand">
+          <span className="brand-icon">💰</span>
+          EXPANSIO
+        </div>
 
-  <div className="navbar-settings">
-    <button className="gear-button" onClick={() => setShowMenu(!showMenu)}>⚙️</button>
+        <div className="navbar-controls">
+          <button 
+            className="theme-toggle" 
+            onClick={toggleTheme}
+            title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+          >
+            {isDarkMode ? "☀️" : "🌙"}
+          </button>
+          
+          <div className="navbar-settings">
+            <button className="gear-button" onClick={() => setShowMenu(!showMenu)}>
+              <Settings size={20} />
+            </button>
 
-    {showMenu && (
-      <div className="dropdown-menu">
-        <button onClick={() => setActiveView("dashboard")}>📊 Dashboard</button>
-        <button onClick={() => setActiveView("overview")}>📅 Monthly Overview</button>
-        <button onClick={() => setActiveView("bucketlist")}>🎯 Bucket List</button>
-        <button onClick={() => setActiveSection("transactions")}>💳 Transactions</button>
-      </div>
-    )}
-  </div>
-</nav>
-
-
-      {/* Sidebar Balance Summary */}
-      <div className="sidebar">
-        <div className="balance-card card-style">
-          <h3>Total Balance</h3>
-          <div className="balance-amount">
-            <span>{CURRENCY.symbol}{formatAmount(balance)}</span>
+            {showMenu && (
+              <div className="dropdown-menu">
+                <button onClick={() => { setActiveView("dashboard"); setShowMenu(false); }}>
+                  <CreditCard size={16} /> Dashboard
+                </button>
+                <button onClick={() => { setActiveView("weekly"); setShowMenu(false); }}>
+                  <TrendingUp size={16} /> Weekly Overview
+                </button>
+                <button onClick={() => { setActiveView("monthly"); setShowMenu(false); }}>
+                  <Calendar size={16} /> Monthly Overview
+                </button>
+                <button onClick={() => { setActiveView("bucketlist"); setShowMenu(false); }}>
+                  <Target size={16} /> Bucket List
+                </button>
+                <button onClick={() => { setActiveSection("transactions"); setShowMenu(false); }}>
+                  <CreditCard size={16} /> Transactions
+                </button>
+              </div>
+            )}
           </div>
-          <div className="balance-summary">
-            <div className="income-summary">
-              <span>Income</span>
-              <span>{CURRENCY.symbol}{formatAmount(statistics.totalIncome)}</span>
+        </div>
+      </nav>
+
+      <div className="app-container">
+        {/* Sidebar */}
+        <div className="sidebar">
+          <div className="balance-card card-style">
+            <div className="balance-header">
+              <h3>Total Balance</h3>
+              <div className={`balance-indicator ${balance >= 0 ? 'positive' : 'negative'}`}>
+                {balance >= 0 ? '📈' : '📉'}
+              </div>
             </div>
-            <div className="expense-summary">
-              <span>Expense</span>
-              <span>{CURRENCY.symbol}{formatAmount(statistics.totalExpense)}</span>
+            <div className="balance-amount">
+              <span className={balance >= 0 ? 'positive' : 'negative'}>
+                {CURRENCY.symbol}{formatAmount(Math.abs(balance))}
+              </span>
+              <small>{balance >= 0 ? 'Available' : 'Deficit'}</small>
+            </div>
+            <div className="balance-summary">
+              <div className="income-summary">
+                <div className="summary-icon">💰</div>
+                <div className="summary-details">
+                  <span className="summary-label">Income</span>
+                  <span className="summary-amount">{CURRENCY.symbol}{formatAmount(statistics.totalIncome)}</span>
+                </div>
+              </div>
+              <div className="expense-summary">
+                <div className="summary-icon">💸</div>
+                <div className="summary-details">
+                  <span className="summary-label">Expense</span>
+                  <span className="summary-amount">{CURRENCY.symbol}{formatAmount(statistics.totalExpense)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Stats */}
+          <div className="quick-stats card-style">
+            <h4>Quick Stats</h4>
+            <div className="stats-grid">
+              <div className="stat-item">
+                <span className="stat-label">Transactions</span>
+                <span className="stat-value">{transactions.length}</span>
+              </div>
+              <div className="stat-item">
+                <span className="stat-label">This Month</span>
+                <span className="stat-value">
+                  {transactions.filter(t => {
+                    const tDate = new Date(t.date || (t.createdAt?.toDate ? t.createdAt.toDate() : t.createdAt));
+                    const now = new Date();
+                    return tDate.getMonth() === now.getMonth() && tDate.getFullYear() === now.getFullYear();
+                  }).length}
+                </span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-  
-      {/* Main Content */}
-      <div className="main-content">
-        {/* Dashboard View */}
-        {activeView === "dashboard" && (
-          <>
-            <div className="calendar-container card-style">
-              <div className="calendar-toggle" onClick={toggleCalendarVisibility}>
-                <h2>Calendar {calendarVisible ? "▼" : "▶"}</h2>
-                <span>{selectedDate.toDateString()}</span>
-              </div>
-              {calendarVisible && renderCalendar()}
-            </div>
-  
-            <div className="transaction-form-container card-style">
-              <h2>{editingTransaction ? "Edit Transaction" : "New Transaction"}</h2>
-  
-              <div className="type-toggle">
-                <button
-                  className={`toggle-btn ${transactionType === "income" ? "active income" : ""}`}
-                  onClick={() => handleTransactionTypeChange("income")}
-                >
-                  💰 Income
-                </button>
-                <button
-                  className={`toggle-btn ${transactionType === "expense" ? "active expense" : ""}`}
-                  onClick={() => handleTransactionTypeChange("expense")}
-                >
-                  💸 Expense
-                </button>
-              </div>
-  
-              <div className="form-group">
-                <label>Amount ({CURRENCY.symbol})</label>
-                <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Enter amount" />
-              </div>
-  
-              <div className="form-group">
-                <label>Description</label>
-                <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Enter description" className="description-input" />
-              </div>
-  
-              <button className="submit-btn" onClick={handleSubmitTransaction}>
-                {editingTransaction ? "Update Transaction" : transactionType === "income" ? "Add Income" : "Add Expense"}
-              </button>
-  
-              {editingTransaction && (
-                <button className="cancel-btn" onClick={() => {
-                  setEditingTransaction(null);
-                  setAmount("");
-                  setDescription("");
-                  setTransactionParty("");
-                  setSelectedTags([]);
-                  setTransactionType("income");
-                }}>
-                  Cancel Editing
-                </button>
-              )}
-            </div>
-  
-            {activeSection === "transactions" && (
-              <div className="transactions-container card-style">
-                <div className="transactions-header">
-                  <h2>Transactions</h2>
-                  <div className="filters">
-                    <div className="filter-group">
-                      <span>Type:</span>
-                      <button className={`filter-btn ${filterType === "all" ? "active" : ""}`} onClick={() => handleFilterChange("all")}>All</button>
-                      <button className={`filter-btn ${filterType === "income" ? "active income" : ""}`} onClick={() => handleFilterChange("income")}>Income</button>
-                      <button className={`filter-btn ${filterType === "expense" ? "active expense" : ""}`} onClick={() => handleFilterChange("expense")}>Expense</button>
+
+        {/* Main Content */}
+        <div className="main-content">
+          {/* Dashboard View */}
+          {activeView === "dashboard" && (
+            <div className="dashboard-grid">
+              <div className="calendar-section">
+                <div className="calendar-container card-style">
+                  <div className="calendar-toggle" onClick={toggleCalendarVisibility}>
+                    <div className="toggle-content">
+                      <Calendar size={20} />
+                      <h3>Calendar</h3>
                     </div>
-                    <div className="filter-group">
-                      <span>Date:</span>
-                      <input type="date" name="start" value={dateRange.start} onChange={handleDateRangeChange} />
-                      <input type="date" name="end" value={dateRange.end} onChange={handleDateRangeChange} />
+                    <div className="toggle-info">
+                      <span>{selectedDate.toDateString()}</span>
+                      <span className="toggle-icon">{calendarVisible ? "▼" : "▶"}</span>
                     </div>
-                    <button className="reset-filters" onClick={resetFilters}>Reset Filters</button>
+                  </div>
+                  {calendarVisible && renderCalendar()}
+                </div>
+              </div>
+
+              <div className="form-section">
+                <div className="transaction-form-container card-style">
+                  <div className="form-header">
+                    <h3>{editingTransaction ? "Edit Transaction" : "New Transaction"}</h3>
+                    {editingTransaction && (
+                      <button 
+                        className="close-edit-btn"
+                        onClick={() => {
+                          setEditingTransaction(null);
+                          setAmount("");
+                          setDescription("");
+                          setTransactionParty("");
+                          setSelectedTags([]);
+                          setTransactionType("income");
+                        }}
+                      >
+                        <X size={16} />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="type-toggle">
+                    <button
+                      className={`toggle-btn ${transactionType === "income" ? "active income" : ""}`}
+                      onClick={() => setTransactionType("income")}
+                    >
+                      <span className="toggle-icon">💰</span>
+                      Income
+                    </button>
+                    <button
+                      className={`toggle-btn ${transactionType === "expense" ? "active expense" : ""}`}
+                      onClick={() => setTransactionType("expense")}
+                    >
+                      <span className="toggle-icon">💸</span>
+                      Expense
+                    </button>
+                  </div>
+
+                  <div className="form-grid">
+                    <div className="form-group">
+                      <label>Amount ({CURRENCY.symbol})</label>
+                      <input 
+                        type="number" 
+                        value={amount} 
+                        onChange={(e) => setAmount(e.target.value)} 
+                        placeholder="0.00"
+                        className="amount-input"
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Description</label>
+                      <textarea 
+                        value={description} 
+                        onChange={(e) => setDescription(e.target.value)} 
+                        placeholder="What was this for?"
+                        className="description-input"
+                        rows="3"
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>{transactionType === "income" ? "Received From" : "Paid To"}</label>
+                      <input 
+                        type="text" 
+                        value={transactionParty} 
+                        onChange={(e) => setTransactionParty(e.target.value)} 
+                        placeholder={transactionType === "income" ? "Source of income" : "Where you spent"}
+                      />
+                    </div>
+                  </div>
+
+                  <button className="submit-btn" onClick={handleSubmitTransaction}>
+                    <Plus size={16} />
+                    {editingTransaction ? "Update Transaction" : `Add ${transactionType === "income" ? "Income" : "Expense"}`}
+                  </button>
+                </div>
+              </div>
+
+              {/* Transactions Section */}
+              {activeSection === "transactions" && (
+                <div className="transactions-section">
+                  <div className="transactions-container card-style">
+                    <div className="transactions-header">
+                      <div className="header-content">
+                        <h3>Recent Transactions</h3>
+                        <button 
+                          className="filter-toggle-btn"
+                          onClick={() => setShowFilters(!showFilters)}
+                        >
+                          <Filter size={16} />
+                          Filters
+                        </button>
+                      </div>
+
+                      {showFilters && (
+                        <div className="filters-panel">
+                          <div className="filters-grid">
+                            <div className="filter-group">
+                              <label>Type</label>
+                              <div className="filter-buttons">
+                                <button 
+                                  className={`filter-btn ${filterType === "all" ? "active" : ""}`} 
+                                  onClick={() => handleFilterChange("all")}
+                                >
+                                  All
+                                </button>
+                                <button 
+                                  className={`filter-btn ${filterType === "income" ? "active income" : ""}`} 
+                                  onClick={() => handleFilterChange("income")}
+                                >
+                                  Income
+                                </button>
+                                <button 
+                                  className={`filter-btn ${filterType === "expense" ? "active expense" : ""}`} 
+                                  onClick={() => handleFilterChange("expense")}
+                                >
+                                  Expense
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="filter-group">
+                              <label>Date Range</label>
+                              <div className="date-inputs">
+                                <input 
+                                  type="date" 
+                                  name="start" 
+                                  value={dateRange.start} 
+                                  onChange={handleDateRangeChange}
+                                  placeholder="Start date"
+                                />
+                                <input 
+                                  type="date" 
+                                  name="end" 
+                                  value={dateRange.end} 
+                                  onChange={handleDateRangeChange}
+                                  placeholder="End date"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="filter-actions">
+                              <button className="reset-filters-btn" onClick={resetFilters}>
+                                <X size={14} />
+                                Reset
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="transactions-list">
+                      {filteredTransactions.length === 0 ? (
+                        <div className="no-transactions">
+                          <div className="empty-state">
+                            <span className="empty-icon">📝</span>
+                            <h4>No transactions found</h4>
+                            <p>Try adjusting your filters or add a new transaction</p>
+                          </div>
+                        </div>
+                      ) : (
+                        filteredTransactions.map(transaction => (
+                          <div key={transaction.id} className={`transaction ${transaction.type}`}>
+                            <div className="transaction-icon">
+                              <div className={`icon-circle ${transaction.type}`}>
+                                {transaction.type === "income" ? "↗" : "↙"}
+                              </div>
+                            </div>
+                            
+                            <div className="transaction-details">
+                              <div className="transaction-main">
+                                <h4 className="transaction-description">{transaction.description}</h4>
+                                <div className="transaction-amount">
+                                  <span className={transaction.type}>
+                                    {transaction.type === "income" ? "+" : "-"}{CURRENCY.symbol}{formatAmount(transaction.amount)}
+                                  </span>
+                                </div>
+                              </div>
+                              
+                              <div className="transaction-meta">
+                                {transaction.party && (
+                                  <span className="transaction-party">
+                                    {transaction.type === "income" ? "From: " : "To: "}{transaction.party}
+                                  </span>
+                                )}
+                                <span className="transaction-date">{formatDate(transaction.date || transaction.createdAt)}</span>
+                              </div>
+
+                              {transaction.tags && transaction.tags.length > 0 && (
+                                <div className="transaction-tags">
+                                  {transaction.tags.map((tag, index) => (
+                                    <span 
+                                      key={index} 
+                                      className={`tag ${filterTag === tag ? "filter-active" : ""}`} 
+                                      onClick={() => handleFilterTagChange(tag)}
+                                    >
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="transaction-actions">
+                              <button className="edit-btn" onClick={() => editTransaction(transaction)}>
+                                ✏️
+                              </button>
+                              <button className="delete-btn" onClick={() => deleteTransaction(transaction.id)}>
+                                🗑️
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
                 </div>
-  
-                <div className="transactions-list">
-                  {filteredTransactions.length === 0 ? (
-                    <div className="no-transactions">No transactions found.</div>
-                  ) : (
-                    filteredTransactions.map(transaction => (
-                      <div key={transaction.id} className={`transaction ${transaction.type}`}>
-                        <div className="transaction-icon">
-                          <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
-                            <circle cx="12" cy="12" r="12" fill={transaction.type === "income" ? "var(--income)" : "var(--expense)"} />
-                            {transaction.type === "income" ? (
-                              <path d="M7 13L12 8L17 13" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            ) : (
-                              <path d="M7 11L12 16L17 11" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            )}
-                          </svg>
-                        </div>
-                        <div className="transaction-details">
-                          <div className="transaction-description">{transaction.description}</div>
-                          {transaction.party && <div className="transaction-party"><em>{transaction.type === "income" ? "From: " : "To: "}</em>{transaction.party}</div>}
-                          <div className="transaction-tags">
-                            {transaction.tags && transaction.tags.map((tag, index) => (
-                              <span key={index} className={`tag ${filterTag === tag ? "filter-active" : ""}`} onClick={() => handleFilterTagChange(tag)}>{tag}</span>
-                            ))}
-                          </div>
-                          <div className="transaction-date">{formatDate(transaction.date || transaction.createdAt)}</div>
-                        </div>
-                        <div className="transaction-amount">
-                          <span>{transaction.type === "income" ? "+" : "-"}{CURRENCY.symbol}{formatAmount(transaction.amount)}</span>
-                        </div>
-                        <div className="transaction-actions">
-                          <button className="edit-btn" onClick={() => editTransaction(transaction)}>✏️</button>
-                          <button className="delete-btn" onClick={() => deleteTransaction(transaction.id)}>🗑️</button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-          </>
-        )}
-  
-        {/* Monthly Overview View */}
-        {activeView === "overview" && (
-          <MonthlyOverviewDiagram transactions={transactions} currentMonthDate={currentMonth} />
-        )}
-  
-        {/* Bucket List View */}
-        {activeView === "bucketlist" && (
-          <div className="bucket-list-section card-style">
-            <h2>My Bucket List</h2>
-            <div className="add-bucket-item-form">
-              <input
-                type="text"
-                value={newBucketItemText}
-                onChange={(e) => setNewBucketItemText(e.target.value)}
-                placeholder="New bucket list item..."
-              />
-              <textarea
-                value={newBucketItemNotes}
-                onChange={(e) => setNewBucketItemNotes(e.target.value)}
-                placeholder="Notes (optional)..."
-              />
-              <button onClick={handleAddBucketItem} className="add-btn">Add Item</button>
-            </div>
-            <div className="bucket-items-display">
-              {bucketListItems.length === 0 ? (
-                <p>Your bucket list is empty. Add something you aspire to!</p>
-              ) : (
-                bucketListItems.map(item => (
-                  <BucketListItem
-                    key={item.id}
-                    item={item}
-                    onUpdate={handleUpdateBucketItem}
-                    onDelete={handleDeleteBucketItem}
-                    onToggleComplete={handleToggleBucketItemComplete}
-                  />
-                ))
               )}
             </div>
-          </div>
-        )}
+          )}
+
+          {/* Weekly Overview View */}
+          {activeView === "weekly" && (
+            <div className="overview-container">
+              <div className="overview-controls">
+                <button onClick={() => changeWeek(-1)} className="nav-btn">← Previous Week</button>
+                <h2>Week of {selectedWeek.toLocaleDateString()}</h2>
+                <button onClick={() => changeWeek(1)} className="nav-btn">Next Week →</button>
+              </div>
+              <WeeklyOverviewDiagram transactions={transactions} selectedWeek={selectedWeek} />
+            </div>
+          )}
+
+          {/* Monthly Overview View */}
+          {activeView === "monthly" && (
+            <div className="overview-container">
+              <div className="overview-controls">
+                <button onClick={() => changeMonth(-1)} className="nav-btn">← Previous Month</button>
+                <h2>{currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}</h2>
+                <button onClick={() => changeMonth(1)} className="nav-btn">Next Month →</button>
+              </div>
+              <MonthlyOverviewDiagram transactions={transactions} currentMonthDate={currentMonth} />
+            </div>
+          )}
+
+          {/* Bucket List View */}
+          {activeView === "bucketlist" && (
+            <div className="bucket-list-section card-style">
+              <div className="section-header">
+                <Target className="section-icon" />
+                <h2>My Bucket List</h2>
+              </div>
+              
+              <div className="add-bucket-item-form">
+                <div className="form-grid">
+                  <input
+                    type="text"
+                    value={newBucketItemText}
+                    onChange={(e) => setNewBucketItemText(e.target.value)}
+                    placeholder="What do you want to achieve?"
+                    className="bucket-input"
+                  />
+                  <textarea
+                    value={newBucketItemNotes}
+                    onChange={(e) => setNewBucketItemNotes(e.target.value)}
+                    placeholder="Add some notes about this goal..."
+                    className="bucket-textarea"
+                    rows="2"
+                  />
+                </div>
+                <button onClick={handleAddBucketItem} className="add-btn">
+                  <Plus size={16} />
+                  Add to Bucket List
+                </button>
+              </div>
+
+              <div className="bucket-items-display">
+                {bucketListItems.length === 0 ? (
+                  <div className="empty-state">
+                    <span className="empty-icon">🎯</span>
+                    <h4>Your bucket list is empty</h4>
+                    <p>Add something you aspire to achieve!</p>
+                  </div>
+                ) : (
+                  <div className="bucket-items-grid">
+                    {bucketListItems.map(item => (
+                      <BucketListItem
+                        key={item.id}
+                        item={item}
+                        onUpdate={handleUpdateBucketItem}
+                        onDelete={handleDeleteBucketItem}
+                        onToggleComplete={handleToggleBucketItemComplete}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
-}
+};
 
 export default App;
